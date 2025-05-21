@@ -24,6 +24,7 @@
 #include "QTimer"
 #include "AI json-request/api.h"
 #include "src/languages.h"
+#include "database.h"
 constexpr int kWindowSize = 1600;
 constexpr int kButtonWidth = 220;
 constexpr int kButtonHeight = 45;
@@ -78,7 +79,8 @@ class Window : public QWidget {
     Q_OBJECT
 
    public:
-    Window();
+    explicit Window(Database &db, QWidget *parent = nullptr);
+    void LoadUserSettings();
 
    protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -90,6 +92,7 @@ class Window : public QWidget {
     void EnableTyping();
     void DisableTyping();
     void LoadTextFromFile();
+    void showLoginDialog();
 
     // visual methods
     void UpdateLetterSpacing(int spacing);
@@ -120,6 +123,8 @@ class Window : public QWidget {
     QTimer* typing_timer_;
     double elapsed_seconds_ = 0;
     int typedCharCount_ = 0;
+    Database &database_;
+    QString currentUsername_;
 
     // visual methods
     int letterSpacing_ = 2;

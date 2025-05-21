@@ -1,6 +1,8 @@
 #include "window.h"
 
-Window::Window() {
+#include "logindialog.h"
+
+Window::Window(Database &db,QWidget *parent) : QWidget(parent), database_(db) {
     QString button_style = R"(
         QPushButton {
             background-color: #ffffff;
@@ -103,12 +105,18 @@ Window::Window() {
     connect(load_text_button, &QPushButton::clicked, this,
             &Window::LoadTextFromFile);
 
+    auto login_button = new QPushButton("Войти", this);
+    login_button->setFixedSize(kButtonWidth, kButtonHeight);
+    login_button->setStyleSheet(button_style);
+    connect(login_button, &QPushButton::clicked, this, &Window::showLoginDialog);
+
     auto button_layout = new QHBoxLayout();
     button_layout->addWidget(language_button);
     button_layout->addWidget(open_button);
     button_layout->addWidget(enable_typing_button);
     button_layout->addWidget(disable_typing_button);
     button_layout->addWidget(load_text_button);
+    button_layout->addWidget(login_button);
     button_layout->setAlignment(Qt::AlignCenter);
     button_layout->setSpacing(kLayoutSpacing);
 
@@ -420,7 +428,15 @@ void Window::UpdateWordSpacing(int spacing) {
 void Window::UpdateFont(const QFont& font) {
     currentFont_ = font;
     generated_text_->setFont(currentFont_);
-}  // setting font
+
+    if (!currentUsername_.isEmpty()) {
+        bool success = database_.updateUserSetting(currentUsername_, "font", font.family());
+        if (!success) {
+            QMessageBox::warning(this, "Ошибка",
+                                 "Не удалось сохранить выбранный шрифт в базе данных.");
+        }
+    }
+}
 
 
 void Window::UpdateFontWeight(int weight) {
@@ -435,6 +451,14 @@ void Window::ChooseTextColor() {
         textColor_ = chosen_color;
         ApplyTextStyles();
     }
+    if (!currentUsername_.isEmpty()) {
+        bool success = database_.updateUserSetting(currentUsername_, "font_color", chosen_color);
+        if (!success) {
+            QMessageBox::warning(this, "Ошибка",
+                                 "Не удалось сохранить выбранный цвет в базе данных.");
+        }
+    }
+
 }  // allowing to use any color for text while typing
 
 void Window::UpdateFontSize(int size) {
@@ -462,5 +486,38 @@ void Window::LoadTextFromFile() {  // just setting a text from a file
         } else {
             QMessageBox::warning(this, "Ошибка", "Не удалось открыть файл.");
         }
+    }
+}
+
+
+void Window::showLoginDialog()
+{
+    if (database_.initDatabase()) {
+        LoginDialog dialog(database_, this);
+        if (dialog.exec() == QDialog::Accepted && dialog.isLoggedIn()) {
+            currentUsername_ = dialog.getUsername();
+            QMessageBox::information(this, "Успех",
+                "Вы вошли как: " + dialog.getUsername());
+            LoadUserSettings();
+        }
+    } else {
+        QMessageBox::critical(this, "Ошибка", "Не удалось подключиться к базе данных");
+    }
+}
+
+void Window::LoadUserSettings()
+{
+    if (currentUsername_.isEmpty()) {
+        return;
+    }
+
+    UserSettings settings = database_.getUserSettings(currentUsername_);
+    if (!settings.font.isEmpty()) {
+        QFont font(settings.font);
+        QColor font_color = settings.font_color;
+        currentFont_ = font;
+        textColor_ = font_color;
+        ApplyTextStyles();
+        generated_text_->setFont(font);
     }
 }

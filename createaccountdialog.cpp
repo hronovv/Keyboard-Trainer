@@ -12,45 +12,133 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     : QDialog(parent), database(db)
 {
     setWindowTitle("Создание аккаунта");
-    setFixedSize(400, 300);
+    resize(505, 375);
 
-    QLabel *titleLabel = new QLabel("Создание нового аккаунта", this);
+    // Градиентный фон всего окна
+    setStyleSheet(R"(
+        CreateAccountDialog {
+            background: qlineargradient(
+                x1:0, y1:0, x2:1, y2:1,
+                stop:0 #667eea,
+                stop:1 #764ba2
+            );
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+        }
+    )");
+
+    // Основной контейнер с белым полупрозрачным фоном
+    QWidget *formContainer = new QWidget(this);
+    formContainer->setObjectName("formContainer");
+    formContainer->setFixedSize(480, 350);
+
+    QVBoxLayout *containerLayout = new QVBoxLayout(formContainer);
+    containerLayout->setContentsMargins(35, 30, 35, 30);
+    containerLayout->setSpacing(20);
+
+    // Заголовок
+    QLabel *titleLabel = new QLabel("Создание нового аккаунта", formContainer);
     titleLabel->setAlignment(Qt::AlignCenter);
-    QFont font = titleLabel->font();
-    font.setPointSize(14);
-    font.setBold(true);
-    titleLabel->setFont(font);
+    QFont titleFont = titleLabel->font();
+    titleFont.setPointSize(24);
+    titleFont.setBold(true);
+    titleLabel->setFont(titleFont);
+    titleLabel->setStyleSheet("color: #4a4a4a;");
 
-    usernameEdit = new QLineEdit(this);
+    // Поля ввода
+    usernameEdit = new QLineEdit(formContainer);
     usernameEdit->setPlaceholderText("Имя пользователя");
+    usernameEdit->setObjectName("inputField");
 
-    passwordEdit = new QLineEdit(this);
+    passwordEdit = new QLineEdit(formContainer);
     passwordEdit->setPlaceholderText("Пароль");
     passwordEdit->setEchoMode(QLineEdit::Password);
+    passwordEdit->setObjectName("inputField");
 
-    QAction *togglePasswordAction = passwordEdit->addAction(QIcon(":/icons/eye.png"), QLineEdit::TrailingPosition);
-    togglePasswordAction->setCheckable(true);
-    connect(togglePasswordAction, &QAction::toggled, [this](bool checked) {
-        passwordEdit->setEchoMode(checked ? QLineEdit::Normal : QLineEdit::Password);
-    });
-
-    confirmPasswordEdit = new QLineEdit(this);
+    confirmPasswordEdit = new QLineEdit(formContainer);
     confirmPasswordEdit->setPlaceholderText("Подтвердите пароль");
     confirmPasswordEdit->setEchoMode(QLineEdit::Password);
+    confirmPasswordEdit->setObjectName("inputField");
 
-    QPushButton *createAccountButton = new QPushButton("Создать аккаунт", this);
+    // Иконка "глазик" для показа/скрытия пароля (passwordEdit)
+    QIcon eyeOpenedIcon(QStringLiteral("/Users/hronov/Documents/Keyboard Trainer/icons/opened-eye.svg"));
+    QIcon eyeClosedIcon(QStringLiteral("/Users/hronov/Documents/Keyboard Trainer/icons/closed-eye.svg"));
 
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setSpacing(15);
-    layout->setContentsMargins(30, 30, 30, 30);
+    QAction *togglePasswordAction = passwordEdit->addAction(eyeClosedIcon, QLineEdit::TrailingPosition);
+    togglePasswordAction->setCheckable(true);
 
-    layout->addWidget(titleLabel);
-    layout->addSpacing(10);
-    layout->addWidget(usernameEdit);
-    layout->addWidget(passwordEdit);
-    layout->addWidget(confirmPasswordEdit);
-    layout->addSpacing(10);
-    layout->addWidget(createAccountButton);
+    connect(togglePasswordAction, &QAction::toggled, this, [=](bool checked){
+        passwordEdit->setEchoMode(checked ? QLineEdit::Normal : QLineEdit::Password);
+        togglePasswordAction->setIcon(checked ? eyeOpenedIcon : eyeClosedIcon);
+    });
+
+    // Иконка "глазик" для confirmPasswordEdit
+    QAction *toggleConfirmPasswordAction = confirmPasswordEdit->addAction(eyeClosedIcon, QLineEdit::TrailingPosition);
+    toggleConfirmPasswordAction->setCheckable(true);
+
+    connect(toggleConfirmPasswordAction, &QAction::toggled, this, [=](bool checked){
+        confirmPasswordEdit->setEchoMode(checked ? QLineEdit::Normal : QLineEdit::Password);
+        toggleConfirmPasswordAction->setIcon(checked ? eyeOpenedIcon : eyeClosedIcon);
+    });
+
+    // Кнопка создания аккаунта
+    QPushButton *createAccountButton = new QPushButton("Создать аккаунт", formContainer);
+    createAccountButton->setObjectName("primaryButton");
+    createAccountButton->setDefault(true);
+    createAccountButton->setCursor(Qt::PointingHandCursor);
+
+    // Собираем layout
+    containerLayout->addWidget(titleLabel);
+    containerLayout->addWidget(usernameEdit);
+    containerLayout->addWidget(passwordEdit);
+    containerLayout->addWidget(confirmPasswordEdit);
+    containerLayout->addWidget(createAccountButton);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->addStretch();
+    mainLayout->addWidget(formContainer, 0, Qt::AlignHCenter);
+    mainLayout->addStretch();
+    mainLayout->setContentsMargins(0,0,0,0);
+
+    // Общие стили для элементов во всём окне (перекрытие setStyleSheet выше)
+    setStyleSheet(R"(
+        #formContainer {
+            background: rgba(255, 255, 255, 0.94);
+            border-radius: 20px;
+
+        }
+
+        #inputField {
+            border: 1.8px solid #ccc;
+            border-radius: 12px;
+            padding: 12px 15px;
+            font-size: 15px;
+            background: white;
+            color: #222;
+
+        }
+        #inputField:focus {
+            border-color: #667eea;
+            outline: none;
+
+        }
+
+        QPushButton#primaryButton {
+            background-color: #667eea;
+            color: white;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 16px;
+            padding: 12px 28px;
+            border: none;
+        }
+        QPushButton#primaryButton:hover {
+            background-color: #556cd6;
+        }
+        QPushButton#primaryButton:pressed {
+            background-color: #4455b2;
+        }
+    )");
 
     connect(createAccountButton, &QPushButton::clicked, this, &CreateAccountDialog::onCreateAccountClicked);
 }

@@ -11,6 +11,7 @@ find_package(Qt6 COMPONENTS
         Gui
         Widgets
         Sql
+        SvgWidgets
         REQUIRED)
 
 find_package(CURL REQUIRED)
@@ -28,10 +29,12 @@ add_executable(Keyboard_Trainer main.cpp
         logindialog.h
         createaccountdialog.cpp
         createaccountdialog.h
+        settingswidget.cpp
+        settingswidget.h
 )
 
 target_link_libraries(Keyboard_Trainer
-        Qt::Core Qt::Gui Qt::Widgets Qt::Sql
+        Qt::Core Qt::Gui Qt::Widgets Qt::Sql Qt::SvgWidgets
         ${CURL_LIBRARIES}
 )
 

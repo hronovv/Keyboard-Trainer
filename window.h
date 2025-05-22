@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QFileDialog>
 #include <QFontComboBox>
+#include <QtSvgWidgets/qsvgwidget.h>
 #include <QGraphicsOpacityEffect>
 #include <QGridLayout>
 #include <QInputDialog>
@@ -22,17 +23,21 @@
 #include "QCheckBox"
 #include "QColorDialog"
 #include "QTimer"
+#include "QJsonArray"
+#include "QJsonParseError"
+#include "QJsonObject"
+#include "QRandomGenerator"
 #include "AI json-request/api.h"
 #include "src/languages.h"
 #include "database.h"
+#include "logindialog.h"
+#include "settingswidget.h"
 constexpr int kWindowSize = 1600;
 constexpr int kButtonWidth = 220;
-constexpr int kButtonHeight = 45;
+constexpr int kButtonHeight = 40;
 constexpr int kLanguageChoiceWidth = 400;
 constexpr int kLanguageChoiceHeight = 600;
 constexpr int kWordsNumber = 100;
-constexpr int kDeafultFontWeight = 400;
-constexpr int kDefaultFontSize = 16;
 constexpr int kDefaultLineHeight = 20;
 constexpr int kIntervalMs = 200;
 constexpr int kTextFieldWidth = 800;
@@ -41,7 +46,6 @@ constexpr int kSpinBoxWidth = 72;
 constexpr int kDefaultLetterSpacing = 2;
 constexpr int kDefaultWordSpacing = 2;
 constexpr int kTextFieldMinimumHeight = 100;
-constexpr int kDefaultFontWeight = 400;
 constexpr int kMinFontWeight = 100;
 constexpr int kMaxFontWeight = 900;
 constexpr int kFontWeightStep = 100;
@@ -61,7 +65,7 @@ constexpr int kHundred = 100;
 constexpr int kLayoutSpacing = 10;
 constexpr int kMainLayoutSpacing = 15;
 constexpr int kColorButtonWidth = 100;
-constexpr int kColotButtonHeight = 30;
+constexpr int kColorButtonHeight = 30;
 constexpr double kWpmCoefficient = 4.25;
 const std::string kPromptTemplatePart1 =
     "Please find a random article about programming(c++, python, variables, "
@@ -93,15 +97,8 @@ class Window : public QWidget {
     void DisableTyping();
     void LoadTextFromFile();
     void showLoginDialog();
-
-    // visual methods
-    void UpdateLetterSpacing(int spacing);
-    void UpdateWordSpacing(int spacing);
-    void UpdateFont(const QFont& font);
-    void UpdateFontWeight(int weight);
-    void ChooseTextColor();
-    void UpdateFontSize(int size);
-    void UpdateLineHeight(int height);
+    void ShowSettings();
+    void ShowWordSetDialog();
 
    private:
     //for proper typing
@@ -126,11 +123,18 @@ class Window : public QWidget {
     Database &database_;
     QString currentUsername_;
 
+
+    SettingsWidget *settingsWidget_;
+    QLabel* usernameLabel;
+
+    QSvgWidget* accountIconLabel;
+    QSvgWidget* settingsIconLabel;
+
     // visual methods
     int letterSpacing_ = 2;
     int wordSpacing_ = 2;
-    int fontWeight_ = kDeafultFontWeight;
-    int fontSize_ = kDefaultFontSize;
+    int fontWeight_;
+    int fontSize_;
     int lineHeight_ = kDefaultLineHeight;
     QFont currentFont_;
     QColor textColor_ = Qt::white;

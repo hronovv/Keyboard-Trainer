@@ -9,6 +9,11 @@
 struct UserSettings {
     QString font;
     QColor font_color;
+    int font_size;
+    int letter_spacing;
+    int word_spacing;
+    int font_weight;
+    int line_height;
 };
 
 class Database : public QObject
@@ -18,7 +23,7 @@ public:
     explicit Database(QObject *parent = nullptr);
     ~Database();
 
-    bool initDatabase(); // Инициализация БД
+    bool initDatabase();
     bool createUser(const QString &username, const QString &password);
     bool authenticateUser(const QString &username, const QString &password);
     bool userExists(const QString &username);

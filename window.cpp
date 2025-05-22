@@ -1,8 +1,23 @@
 #include "window.h"
 
-#include "logindialog.h"
-
 Window::Window(Database &db,QWidget *parent) : QWidget(parent), database_(db) {
+    settingsWidget_ = new SettingsWidget(database_, currentUsername_, this);
+    settingsWidget_->hide();
+
+    connect(settingsWidget_, &SettingsWidget::settingsChanged, this, [this](const UserSettings &s){
+        currentFont_ = QFont(s.font);
+        currentFont_.setPointSize(s.font_size);
+        currentFont_.setWeight(QFont::Weight(s.font_weight));
+
+        textColor_ = s.font_color;
+        fontSize_ = s.font_size;
+        letterSpacing_ = s.letter_spacing;
+        wordSpacing_ = s.word_spacing;
+        fontWeight_ = s.font_weight;
+        lineHeight_ = s.line_height;
+        ApplyTextStyles();
+    });
+
     QString button_style = R"(
         QPushButton {
             background-color: #ffffff;
@@ -21,6 +36,7 @@ Window::Window(Database &db,QWidget *parent) : QWidget(parent), database_(db) {
             color: #333333;
         }
     )";
+
     typing_timer_ = new QTimer(this);
     typing_timer_->setInterval(kIntervalMs);
     connect(typing_timer_, &QTimer::timeout, this, &Window::UpdateWPM);
@@ -28,13 +44,12 @@ Window::Window(Database &db,QWidget *parent) : QWidget(parent), database_(db) {
 
     generated_text_ = new QLabel(this);
     generated_text_->setStyleSheet(
-        "font-size: 16px; color: #FFFFFF; letter-spacing: 2px; word-spacing: "
-        "2px");
-    generated_text_->setAlignment(Qt::AlignCenter);
+        "font-size: 16px; color: #FFFFFF; letter-spacing: 2px; word-spacing: 2px; font-weight: 500;");
+    // Выравнивание по центру горизонтально и по верху вертикально
+    generated_text_->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
     generated_text_->setWordWrap(true);
     generated_text_->setFixedWidth(kTextFieldWidth);
-    generated_text_->setSizePolicy(QSizePolicy::Preferred,
-                                   QSizePolicy::Expanding);
+    generated_text_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     generated_text_->setMinimumHeight(kTextFieldMinimumHeigth);
 
     auto open_button = new QPushButton("Сгенерировать текст", this);
@@ -45,133 +60,81 @@ Window::Window(Database &db,QWidget *parent) : QWidget(parent), database_(db) {
     auto language_button = new QPushButton("Выбрать язык", this);
     language_button->setFixedSize(kButtonWidth, kButtonHeight);
     language_button->setStyleSheet(button_style);
-    connect(language_button, &QPushButton::clicked, this,
-            &Window::ShowLanguageDialog);
+    connect(language_button, &QPushButton::clicked, this, &Window::ShowLanguageDialog);
 
     auto enable_typing_button = new QPushButton("Начать печатать", this);
     enable_typing_button->setFixedSize(kButtonWidth, kButtonHeight);
     enable_typing_button->setStyleSheet(button_style);
-    connect(enable_typing_button, &QPushButton::clicked, this,
-            &Window::EnableTyping);
+    connect(enable_typing_button, &QPushButton::clicked, this, &Window::EnableTyping);
 
     auto disable_typing_button = new QPushButton("Закончить печатать", this);
     disable_typing_button->setFixedSize(kButtonWidth, kButtonHeight);
     disable_typing_button->setStyleSheet(button_style);
-    connect(disable_typing_button, &QPushButton::clicked, this,
-            &Window::DisableTyping);
-
-    auto spacing_spin_box = new QSpinBox(this);
-    spacing_spin_box->setRange(0, kMaxLetterSpacing);
-    spacing_spin_box->setSingleStep(1);
-    spacing_spin_box->setValue(2);
-    spacing_spin_box->setFixedWidth(kSpinBoxWidth);
-    spacing_spin_box->setFocusPolicy(Qt::NoFocus);
-    connect(spacing_spin_box, QOverload<int>::of(&QSpinBox::valueChanged), this,
-            &Window::UpdateLetterSpacing);
-
-    auto word_spacing_spin_box = new QSpinBox(this);
-    word_spacing_spin_box->setRange(0, kMaxWordSpacing);
-    word_spacing_spin_box->setSingleStep(1);
-    word_spacing_spin_box->setValue(2);
-    word_spacing_spin_box->setFixedWidth(kSpinBoxWidth);
-    word_spacing_spin_box->setFocusPolicy(Qt::NoFocus);
-    connect(word_spacing_spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &Window::UpdateWordSpacing);
-
-    auto font_combo_box = new QFontComboBox(this);
-    font_combo_box->setFixedWidth(kFontButtonWidth);
-    font_combo_box->setFocusPolicy(Qt::NoFocus);
-    connect(font_combo_box, &QFontComboBox::currentFontChanged, this,
-            &Window::UpdateFont);
-
-    auto weight_spin_box = new QSpinBox(this);
-    weight_spin_box->setRange(kMinFontWeight, kMaxFontWeight);
-    weight_spin_box->setSingleStep(kFontWeightStep);
-    weight_spin_box->setValue(kDefaultFontWeight);
-    weight_spin_box->setFixedWidth(kSpinBoxWidth);
-    weight_spin_box->setFocusPolicy(Qt::NoFocus);
-    connect(weight_spin_box, QOverload<int>::of(&QSpinBox::valueChanged), this,
-            &Window::UpdateFontWeight);
+    connect(disable_typing_button, &QPushButton::clicked, this, &Window::DisableTyping);
 
     statusLabel_ = new QLabel("RAW WPM: 0 | Точность: 100% | WPM: 0", this);
     statusLabel_->setAlignment(Qt::AlignBottom | Qt::AlignCenter);
     statusLabel_->setStyleSheet(
-        "font-size: 20px; color: #FFFFFF; letter-spacing: 2px; word-spacing: "
-        "2px");
+        "font-size: 20px; color: #FFFFFF; letter-spacing: 2px; word-spacing: 2px");
 
-    auto load_text_button = new QPushButton("Загрузить текст", this);
-    load_text_button->setFixedSize(kButtonWidth, kButtonHeight);
-    load_text_button->setStyleSheet(button_style);
-    connect(load_text_button, &QPushButton::clicked, this,
-            &Window::LoadTextFromFile);
+    // auto load_text_button = new QPushButton("Загрузить текст", this);
+    // load_text_button->setFixedSize(kButtonWidth, kButtonHeight);
+    // load_text_button->setStyleSheet(button_style);
+    // connect(load_text_button, &QPushButton::clicked, this, &Window::LoadTextFromFile);
+
+    auto wordset_button = new QPushButton("Выбрать набор слов", this);
+    wordset_button->setFixedSize(kButtonWidth, kButtonHeight);
+    wordset_button->setStyleSheet(button_style);
+    connect(wordset_button, &QPushButton::clicked, this, &Window::ShowWordSetDialog);
+
 
     auto login_button = new QPushButton("Войти", this);
     login_button->setFixedSize(kButtonWidth, kButtonHeight);
     login_button->setStyleSheet(button_style);
     connect(login_button, &QPushButton::clicked, this, &Window::showLoginDialog);
 
+    auto settings_button = new QPushButton(this);
+    settings_button->setIcon(QIcon("/Users/hronov/Documents/Keyboard Trainer/icons/settings.svg"));
+    settings_button->setIconSize(QSize(45, 45));
+    settings_button->setFlat(true);
+    settings_button->setCursor(Qt::PointingHandCursor);
+    connect(settings_button, &QPushButton::clicked, this, &Window::ShowSettings);
+
+    accountIconLabel = new QSvgWidget("/Users/hronov/Documents/Keyboard Trainer/icons/account.svg", this);
+    accountIconLabel->setFixedSize(44, 45);
+
     auto button_layout = new QHBoxLayout();
     button_layout->addWidget(language_button);
     button_layout->addWidget(open_button);
     button_layout->addWidget(enable_typing_button);
     button_layout->addWidget(disable_typing_button);
-    button_layout->addWidget(load_text_button);
+    // button_layout->addWidget(load_text_button);
+    button_layout->addWidget(wordset_button);
     button_layout->addWidget(login_button);
     button_layout->setAlignment(Qt::AlignCenter);
     button_layout->setSpacing(kLayoutSpacing);
 
-    auto color_button = new QPushButton("Цвет", this);
-    color_button->setFixedSize(kColorButtonWidth, kColotButtonHeight);
-    connect(color_button, &QPushButton::clicked, this,
-            &Window::ChooseTextColor);
-
-    auto font_size_spin_box = new QSpinBox(this);
-    font_size_spin_box->setRange(kMinFontSize, kMaxFontSize);
-    font_size_spin_box->setValue(kDefaultFontSize);
-    font_size_spin_box->setFixedWidth(kSpinBoxWidth);
-    font_size_spin_box->setFocusPolicy(Qt::NoFocus);
-    connect(font_size_spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &Window::UpdateFontSize);
-
-    auto line_height_spin_box = new QSpinBox(this);
-    line_height_spin_box->setRange(kMinLineHeight, kMaxLineHeight);
-    line_height_spin_box->setSingleStep(kLineHeightStep);
-    line_height_spin_box->setValue(lineHeight_);
-    line_height_spin_box->setFixedWidth(kSpinBoxWidth);
-    line_height_spin_box->setFocusPolicy(Qt::NoFocus);
-    connect(
-        line_height_spin_box, QOverload<int>::of(&QSpinBox::valueChanged), this,
-        &Window::
-            UpdateLineHeight);	// explicit overloading for int with a proper slot when signal is triggered
-
-    auto settings_layout = new QHBoxLayout();
-    settings_layout->addWidget(new QLabel("Отступ(буквы):", this));
-    settings_layout->addWidget(spacing_spin_box);
-    settings_layout->addWidget(new QLabel("Отступ(слова):", this));
-    settings_layout->addWidget(word_spacing_spin_box);
-    settings_layout->addWidget(new QLabel("Шрифт:", this));
-    settings_layout->addWidget(font_combo_box);
-    settings_layout->addWidget(new QLabel("Размер шрифта:", this));
-    settings_layout->addWidget(font_size_spin_box);
-    settings_layout->addWidget(new QLabel("Жирность:", this));
-    settings_layout->addWidget(weight_spin_box);
-    settings_layout->addWidget(new QLabel("Межстрочный интервал:", this));
-    settings_layout->addWidget(line_height_spin_box);
-    settings_layout->addWidget(color_button);
-    settings_layout->setAlignment(Qt::AlignCenter);
-    settings_layout->setSpacing(kLayoutSpacing);
+    auto bottomLayout = new QHBoxLayout();
+    bottomLayout->addWidget(settings_button);
+    bottomLayout->addSpacing(100);
+    bottomLayout->addWidget(accountIconLabel);
+    usernameLabel = new QLabel("", this);
+    usernameLabel->setStyleSheet("font-size: 18px; color: #FFFFFF; letter-spacing: 2px; word-spacing: 2px");
+    bottomLayout->addWidget(usernameLabel);
+    bottomLayout->setAlignment(Qt::AlignCenter);
 
     auto main_layout = new QVBoxLayout(this);
+    main_layout->addLayout(bottomLayout);
     main_layout->addLayout(button_layout);
-    main_layout->addLayout(settings_layout);
-    main_layout->addWidget(generated_text_, 0, Qt::AlignCenter);
+    main_layout->addSpacing(20); // Отступ между кнопками и текстом
+    main_layout->addWidget(generated_text_, 0, Qt::AlignHCenter);
     main_layout->addWidget(statusLabel_);
+    main_layout->addStretch();
+
     main_layout->setAlignment(Qt::AlignTop);
-    main_layout->setSpacing(kMainLayoutSpacing);
 
     setLayout(main_layout);
 }
-
 
 void Window::SetLanguage(const QString& language) {
     prompt_language_ = language;  // setting language for HTTP POST request
@@ -400,76 +363,24 @@ void Window::keyPressEvent(QKeyEvent* event) {
 
 
 void Window::ApplyTextStyles() {
-    generated_text_->setStyleSheet(QString("font-size: %1px; "
-                                           "color: %2; "
-                                           "font-weight: %3; "
-                                           "letter-spacing: %4px; "
-                                           "word-spacing: %5px; "
-                                           "line-height: %6px;")
-                                       .arg(fontSize_)
-                                       .arg(textColor_.name())
-                                       .arg(fontWeight_)
-                                       .arg(letterSpacing_)
-                                       .arg(wordSpacing_)
-                                       .arg(lineHeight_));
+    generated_text_->setStyleSheet(QString(
+        "font-family: '%7'; "
+        "font-size: %1px; "
+        "color: %2; "
+        "font-weight: %3; "
+        "letter-spacing: %4px; "
+        "word-spacing: %5px; "
+        "line-height: %6px;"
+        )
+        .arg(fontSize_)
+        .arg(textColor_.name())
+        .arg(fontWeight_)
+        .arg(letterSpacing_)
+        .arg(wordSpacing_)
+        .arg(lineHeight_)
+        .arg(currentFont_.family())
+    );
 }  // gathering and applying all parameters (1 can be reset if 2-nd is changed separately)
-
-
-void Window::UpdateLetterSpacing(int spacing) {
-    letterSpacing_ = spacing;
-    ApplyTextStyles();
-}  // distance between symbols
-
-void Window::UpdateWordSpacing(int spacing) {
-    wordSpacing_ = spacing;
-    ApplyTextStyles();
-}  // distance between words
-
-void Window::UpdateFont(const QFont& font) {
-    currentFont_ = font;
-    generated_text_->setFont(currentFont_);
-
-    if (!currentUsername_.isEmpty()) {
-        bool success = database_.updateUserSetting(currentUsername_, "font", font.family());
-        if (!success) {
-            QMessageBox::warning(this, "Ошибка",
-                                 "Не удалось сохранить выбранный шрифт в базе данных.");
-        }
-    }
-}
-
-
-void Window::UpdateFontWeight(int weight) {
-    fontWeight_ = weight;
-    ApplyTextStyles();
-}  // updating font weigth(boldness)
-
-void Window::ChooseTextColor() {
-    QColor chosen_color =
-        QColorDialog::getColor(textColor_, this, "Выберите цвет текста");
-    if (chosen_color.isValid()) {
-        textColor_ = chosen_color;
-        ApplyTextStyles();
-    }
-    if (!currentUsername_.isEmpty()) {
-        bool success = database_.updateUserSetting(currentUsername_, "font_color", chosen_color);
-        if (!success) {
-            QMessageBox::warning(this, "Ошибка",
-                                 "Не удалось сохранить выбранный цвет в базе данных.");
-        }
-    }
-
-}  // allowing to use any color for text while typing
-
-void Window::UpdateFontSize(int size) {
-    fontSize_ = size;
-    ApplyTextStyles();
-}  // setting font size
-
-void Window::UpdateLineHeight(int height) {
-    lineHeight_ = height;
-    ApplyTextStyles();
-}  // setting line height
 
 void Window::LoadTextFromFile() {  // just setting a text from a file
     QString file_name = QFileDialog::getOpenFileName(
@@ -498,6 +409,8 @@ void Window::showLoginDialog()
             currentUsername_ = dialog.getUsername();
             QMessageBox::information(this, "Успех",
                 "Вы вошли как: " + dialog.getUsername());
+            currentUsername_ = dialog.getUsername();
+            settingsWidget_->setUsername(currentUsername_);
             LoadUserSettings();
         }
     } else {
@@ -512,12 +425,152 @@ void Window::LoadUserSettings()
     }
 
     UserSettings settings = database_.getUserSettings(currentUsername_);
-    if (!settings.font.isEmpty()) {
-        QFont font(settings.font);
-        QColor font_color = settings.font_color;
-        currentFont_ = font;
-        textColor_ = font_color;
+        currentFont_ = QFont(settings.font);
+        currentFont_.setPointSize(settings.font_size);
+        currentFont_.setWeight(QFont::Weight(settings.font_weight));
+
+        textColor_ = settings.font_color;
+        fontSize_ = settings.font_size;
+        letterSpacing_ = settings.letter_spacing;
+        wordSpacing_ = settings.word_spacing;
+        fontWeight_ = settings.font_weight;
+        lineHeight_ = settings.line_height;
+
         ApplyTextStyles();
-        generated_text_->setFont(font);
+
+        usernameLabel->setText(currentUsername_);
+}
+
+
+void Window::ShowSettings() {
+    if (!currentUsername_.isEmpty()) {
+        settingsWidget_->loadSettings();
+
+        // Получить размер экрана, на котором находится окно или родитель
+        QRect screenGeometry;
+        if (settingsWidget_->parentWidget()) {
+            screenGeometry = settingsWidget_->parentWidget()->screen()->geometry();
+        } else {
+            screenGeometry = QGuiApplication::primaryScreen()->geometry();
+        }
+
+        // Установить размер окна равным размеру экрана и позицию (0,0) экрана
+        settingsWidget_->setGeometry(screenGeometry);
+
+        // Показать окно нормальным способом, не fullscreen
+        settingsWidget_->show();
+
+        // Анимация появления (опционально)
+        QPropertyAnimation *anim = new QPropertyAnimation(settingsWidget_, "windowOpacity");
+        settingsWidget_->setWindowOpacity(0);
+        anim->setDuration(300);
+        anim->setStartValue(0);
+        anim->setEndValue(1);
+        anim->start(QAbstractAnimation::DeleteWhenStopped);
+    } else {
+        QMessageBox::information(this, "Инфо", "Сначала войдите в систему");
     }
+}
+
+
+void Window::ShowWordSetDialog() {
+    QString languagesPath = "/Users/hronov/Documents/Keyboard Trainer/languages";
+    QDir dir(languagesPath);
+    QStringList filters;
+    filters << "*.json";
+    QFileInfoList fileList = dir.entryInfoList(filters, QDir::Files | QDir::NoSymLinks);
+    if (fileList.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Папка languages пуста или не найдены JSON файлы");
+        return;
+    }
+    QDialog dialog(this);
+    dialog.setWindowTitle("Выберите набор слов");
+    dialog.setModal(true);
+    dialog.setFixedSize(350, 400);
+    QVBoxLayout layout(&dialog);
+    QListWidget listWidget(&dialog);
+    for (const QFileInfo &fileInfo : fileList) {
+        listWidget.addItem(fileInfo.fileName());
+    }
+
+    layout.addWidget(&listWidget);
+
+    connect(&listWidget, &QListWidget::itemClicked, &dialog, [&](QListWidgetItem *item) {
+        QString fileName = item->text();
+        dialog.accept();
+
+        QString fullPath = languagesPath + '/' + fileName;
+        QFile file(fullPath);
+        if (!file.open(QIODevice::ReadOnly)) {
+            QMessageBox::warning(this, "Ошибка", "Не удалось открыть файл " + fileName);
+            return;
+        }
+        QByteArray jsonData = file.readAll();
+        file.close();
+
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(jsonData, &parseError);
+        if (parseError.error != QJsonParseError::NoError) {
+            QMessageBox::warning(this, "Ошибка", "Ошибка парсинга JSON: " + parseError.errorString());
+            return;
+        }
+
+        QStringList wordsList;
+
+        if (doc.isArray()) {
+            // JSON — массив слов
+            QJsonArray jsonArray = doc.array();
+            for (const QJsonValue &val : jsonArray) {
+                if (val.isString()) {
+                    wordsList.append(val.toString());
+                }
+            }
+        } else if (doc.isObject()) {
+            // JSON — объект, попробуем найти ключ со словами, например "words" или ключ из документации
+            QJsonObject jsonObj = doc.object();
+            if (jsonObj.contains("words") && jsonObj.value("words").isArray()) {
+                QJsonArray jsonArray = jsonObj.value("words").toArray();
+                for (const QJsonValue &val : jsonArray) {
+                    if (val.isString()) {
+                        wordsList.append(val.toString());
+                    }
+                }
+            } else {
+                // если нет ключа "words", то собираем все строковые значения как запасной вариант
+                for (auto it = jsonObj.begin(); it != jsonObj.end(); ++it) {
+                    if (it.value().isString())
+                        wordsList.append(it.value().toString());
+                }
+            }
+        }
+
+        if (wordsList.isEmpty()) {
+            QMessageBox::warning(this, "Ошибка", "В файле нет слов для генерации");
+            return;
+        }
+
+        // Выберем случайно 15 слов (или меньше, если слов меньше)
+        QStringList selectedWords;
+        int count = std::min(15, int(wordsList.size()));
+        QSet<int> usedIndices;
+        while (selectedWords.size() < count) {
+            int index = QRandomGenerator::global()->bounded(wordsList.size());
+            if (!usedIndices.contains(index)) {
+                usedIndices.insert(index);
+                selectedWords.append(wordsList.at(index));
+            }
+        }
+
+        // Отобразим слова через пробел в generated_text_
+        generated_text_->setText(selectedWords.join(" "));
+        ResetText();
+    });
+
+
+    QRect screen_geometry = this->screen()->geometry();
+    dialog.move(
+        (screen_geometry.width() - dialog.width()) / 2,
+        (screen_geometry.height() - dialog.height()) / 2);
+
+    dialog.exec();
 }

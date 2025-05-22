@@ -474,6 +474,18 @@ void Window::ShowSettings() {
 
 
 void Window::ShowWordSetDialog() {
+    // Создаем overlay — затемняющий полупрозрачный виджет поверх родителя
+    QWidget *overlay = new QWidget(this);
+    overlay->setObjectName("overlayWidget");
+    overlay->setGeometry(this->rect());
+    overlay->setStyleSheet("background-color: rgba(0, 0, 0, 100);");
+    overlay->show();
+
+    // Применяем блюр к родителю (к this)
+    QGraphicsBlurEffect *blur = new QGraphicsBlurEffect(overlay);
+    blur->setBlurRadius(40);
+    this->setGraphicsEffect(blur);
+
     QString languagesPath = "/Users/hronov/Documents/Keyboard Trainer/languages";
     QDir dir(languagesPath);
     QStringList filters;
@@ -481,22 +493,94 @@ void Window::ShowWordSetDialog() {
     QFileInfoList fileList = dir.entryInfoList(filters, QDir::Files | QDir::NoSymLinks);
     if (fileList.isEmpty()) {
         QMessageBox::warning(this, "Ошибка", "Папка languages пуста или не найдены JSON файлы");
+        overlay->deleteLater();
+        this->setGraphicsEffect(nullptr);
         return;
     }
+
     QDialog dialog(this);
     dialog.setWindowTitle("Выберите набор слов");
     dialog.setModal(true);
-    dialog.setFixedSize(350, 400);
+    dialog.setFixedSize(350, 450);
+
+    dialog.setStyleSheet(R"(
+        QDialog {
+            background-color: #2e3440;
+            color: #d8dee9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        QLineEdit {
+            background-color: #3b4252;
+            border: 1px solid #4c566a;
+            border-radius: 5px;
+            padding: 6px 8px;
+            color: #eceff4;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        QLineEdit:focus {
+            border: 1px solid #88c0d0;
+            background-color: #434c5e;
+        }
+        QListWidget {
+            background-color: #3b4252;
+            border: 1px solid #4c566a;
+            border-radius: 5px;
+            color: #eceff4;
+            font-size: 14px;
+        }
+        QListWidget::item {
+            padding: 8px 12px;
+            border-radius: 3px;
+        }
+        QListWidget::item:selected {
+            background-color: #81a1c1;
+            color: #2e3440;
+        }
+        QListWidget::item:hover {
+            background-color: #5e81ac;
+        }
+        QScrollBar:vertical {
+            background: #3b4252;
+            width: 10px;
+            margin: 15px 0 15px 0;
+            border-radius: 5px;
+        }
+        QScrollBar::handle:vertical {
+            background: #81a1c1;
+            min-height: 30px;
+            border-radius: 5px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0;
+        }
+    )");
+
     QVBoxLayout layout(&dialog);
-    QListWidget listWidget(&dialog);
+    QLineEdit *searchEdit = new QLineEdit(&dialog);
+    searchEdit->setPlaceholderText("Поиск...");
+    layout.addWidget(searchEdit);
+
+    QListWidget *listWidget = new QListWidget(&dialog);
     for (const QFileInfo &fileInfo : fileList) {
-        listWidget.addItem(fileInfo.fileName());
+        QString name = fileInfo.completeBaseName();
+        name.replace('_', ' ');
+        listWidget->addItem(name);
     }
+    layout.addWidget(listWidget);
 
-    layout.addWidget(&listWidget);
+    connect(searchEdit, &QLineEdit::textChanged, this, [listWidget](const QString &text){
+        QString filter = text.trimmed();
+        for (int i = 0; i < listWidget->count(); ++i) {
+            QListWidgetItem *item = listWidget->item(i);
+            bool match = item->text().contains(filter, Qt::CaseInsensitive);
+            item->setHidden(!match);
+        }
+    });
 
-    connect(&listWidget, &QListWidget::itemClicked, &dialog, [&](QListWidgetItem *item) {
+    connect(listWidget, &QListWidget::itemClicked, &dialog, [&](QListWidgetItem *item) {
         QString fileName = item->text();
+        fileName.replace(' ', '_') += ".json";
         dialog.accept();
 
         QString fullPath = languagesPath + '/' + fileName;
@@ -518,7 +602,6 @@ void Window::ShowWordSetDialog() {
         QStringList wordsList;
 
         if (doc.isArray()) {
-            // JSON — массив слов
             QJsonArray jsonArray = doc.array();
             for (const QJsonValue &val : jsonArray) {
                 if (val.isString()) {
@@ -526,7 +609,6 @@ void Window::ShowWordSetDialog() {
                 }
             }
         } else if (doc.isObject()) {
-            // JSON — объект, попробуем найти ключ со словами, например "words" или ключ из документации
             QJsonObject jsonObj = doc.object();
             if (jsonObj.contains("words") && jsonObj.value("words").isArray()) {
                 QJsonArray jsonArray = jsonObj.value("words").toArray();
@@ -536,7 +618,6 @@ void Window::ShowWordSetDialog() {
                     }
                 }
             } else {
-                // если нет ключа "words", то собираем все строковые значения как запасной вариант
                 for (auto it = jsonObj.begin(); it != jsonObj.end(); ++it) {
                     if (it.value().isString())
                         wordsList.append(it.value().toString());
@@ -549,9 +630,8 @@ void Window::ShowWordSetDialog() {
             return;
         }
 
-        // Выберем случайно 15 слов (или меньше, если слов меньше)
-        QStringList selectedWords;
         int count = std::min(15, int(wordsList.size()));
+        QStringList selectedWords;
         QSet<int> usedIndices;
         while (selectedWords.size() < count) {
             int index = QRandomGenerator::global()->bounded(wordsList.size());
@@ -561,11 +641,9 @@ void Window::ShowWordSetDialog() {
             }
         }
 
-        // Отобразим слова через пробел в generated_text_
         generated_text_->setText(selectedWords.join(" "));
         ResetText();
     });
-
 
     QRect screen_geometry = this->screen()->geometry();
     dialog.move(
@@ -573,4 +651,8 @@ void Window::ShowWordSetDialog() {
         (screen_geometry.height() - dialog.height()) / 2);
 
     dialog.exec();
+
+    // По закрытию диалога убираем блюр и overlay
+    this->setGraphicsEffect(nullptr);
+    overlay->deleteLater();
 }

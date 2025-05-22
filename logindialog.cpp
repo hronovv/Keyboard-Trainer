@@ -17,25 +17,11 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
     setWindowTitle("Вход в систему");
     resize(425, 365);
 
-
-    setStyleSheet(R"(
-        LoginDialog {
-            background: qlineargradient(
-                x1:0, y1:0, x2:1, y2:1,
-                stop:0 #667eea,
-                stop:1 #764ba2
-            );
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #333;
-        }
-    )");
-
-    // Контейнер для формы входа
+    // Основной контейнер с темным фоном
     QWidget *formContainer = new QWidget(this);
     formContainer->setObjectName("formContainer");
     formContainer->setFixedSize(400, 340);
 
-    // Разметка для контейнера
     QVBoxLayout *containerLayout = new QVBoxLayout(formContainer);
     containerLayout->setContentsMargins(35, 30, 35, 30);
     containerLayout->setSpacing(20);
@@ -46,14 +32,14 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
     titleFont.setBold(true);
     titleLabel->setFont(titleFont);
     titleLabel->setAlignment(Qt::AlignCenter);
-    titleLabel->setStyleSheet("color: #4a4a4a;");
+    titleLabel->setStyleSheet("color: #d8dee9;");
 
     QLabel *subtitleLabel = new QLabel("Пожалуйста, войдите в свой аккаунт", formContainer);
     QFont subtitleFont = subtitleLabel->font();
     subtitleFont.setPointSize(15);
     subtitleLabel->setFont(subtitleFont);
     subtitleLabel->setAlignment(Qt::AlignCenter);
-    subtitleLabel->setStyleSheet("color: #666;");
+    subtitleLabel->setStyleSheet("color: #d8dee9;");
 
     usernameEdit = new QLineEdit(formContainer);
     usernameEdit->setPlaceholderText("Имя пользователя");
@@ -70,7 +56,6 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
 
     QAction *togglePasswordAction = passwordEdit->addAction(eyeClosedIcon, QLineEdit::TrailingPosition);
     togglePasswordAction->setCheckable(true);
-
     connect(togglePasswordAction, &QAction::toggled, this, [=](bool checked){
         passwordEdit->setEchoMode(checked ? QLineEdit::Normal : QLineEdit::Password);
         togglePasswordAction->setIcon(checked ? eyeOpenedIcon : eyeClosedIcon);
@@ -96,37 +81,37 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
     containerLayout->addWidget(passwordEdit);
     containerLayout->addLayout(buttonsLayout);
 
-    // Центруем форму в окне
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addStretch();
     mainLayout->addWidget(formContainer, 0, Qt::AlignHCenter);
     mainLayout->addStretch();
-    mainLayout->setContentsMargins(0,0,0,0);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
 
-    // Стили для формы и элементов
+    // Применяем стиль в точности как ваш темный стиль
     setStyleSheet(R"(
-        #formContainer {
-            background: rgba(255, 255, 255, 0.94);
-            border-radius: 20px;
-
+        QDialog {
+            background-color: #2e3440;
+            color: #d8dee9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-
-        #inputField {
-            border: 1.8px solid #ccc;
+        #formContainer {
+            background-color: #3b4252;
             border-radius: 12px;
-            padding: 12px 15px;
-            font-size: 15px;
-            background: white;
-            color: #222;
-
+        }
+        #inputField {
+            background-color: #3b4252;
+            border: 1px solid #4c566a;
+            border-radius: 5px;
+            padding: 6px 8px;
+            color: #eceff4;
+            font-size: 14px;
+            margin-bottom: 10px;
         }
         #inputField:focus {
-            border-color: #667eea;
+            border: 1px solid #88c0d0;
+            background-color: #434c5e;
             outline: none;
-            color: #222;
-
         }
-
         QPushButton#primaryButton {
             background-color: #667eea;
             color: white;
@@ -135,7 +120,6 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
             font-size: 16px;
             padding: 12px 28px;
             border: none;
-
         }
         QPushButton#primaryButton:hover {
             background-color: #556cd6;
@@ -143,7 +127,6 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
         QPushButton#primaryButton:pressed {
             background-color: #4455b2;
         }
-
         QPushButton#secondaryButton {
             background-color: transparent;
             border: 2.2px solid #667eea;
@@ -152,7 +135,6 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
             font-weight: 600;
             font-size: 16px;
             padding: 12px 26px;
-
         }
         QPushButton#secondaryButton:hover {
             background-color: #667eea;
@@ -164,7 +146,6 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
         }
     )");
 
-    // Подключение сигналов
     connect(loginButton, &QPushButton::clicked, this, &LoginDialog::onLoginClicked);
     connect(createAccountButton, &QPushButton::clicked, this, &LoginDialog::showCreateAccountDialog);
 }

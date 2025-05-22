@@ -14,20 +14,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     setWindowTitle("Создание аккаунта");
     resize(505, 375);
 
-    // Градиентный фон всего окна
-    setStyleSheet(R"(
-        CreateAccountDialog {
-            background: qlineargradient(
-                x1:0, y1:0, x2:1, y2:1,
-                stop:0 #667eea,
-                stop:1 #764ba2
-            );
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #333;
-        }
-    )");
-
-    // Основной контейнер с белым полупрозрачным фоном
+    // Основной контейнер с прозрачным тёмным фоном
     QWidget *formContainer = new QWidget(this);
     formContainer->setObjectName("formContainer");
     formContainer->setFixedSize(480, 350);
@@ -43,7 +30,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     titleFont.setPointSize(24);
     titleFont.setBold(true);
     titleLabel->setFont(titleFont);
-    titleLabel->setStyleSheet("color: #4a4a4a;");
+    titleLabel->setStyleSheet("color: #d8dee9;");
 
     // Поля ввода
     usernameEdit = new QLineEdit(formContainer);
@@ -60,22 +47,19 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     confirmPasswordEdit->setEchoMode(QLineEdit::Password);
     confirmPasswordEdit->setObjectName("inputField");
 
-    // Иконка "глазик" для показа/скрытия пароля (passwordEdit)
+    // Иконка для показа/скрытия пароля
     QIcon eyeOpenedIcon(QStringLiteral("/Users/hronov/Documents/Keyboard Trainer/icons/opened-eye.svg"));
     QIcon eyeClosedIcon(QStringLiteral("/Users/hronov/Documents/Keyboard Trainer/icons/closed-eye.svg"));
 
     QAction *togglePasswordAction = passwordEdit->addAction(eyeClosedIcon, QLineEdit::TrailingPosition);
     togglePasswordAction->setCheckable(true);
-
     connect(togglePasswordAction, &QAction::toggled, this, [=](bool checked){
         passwordEdit->setEchoMode(checked ? QLineEdit::Normal : QLineEdit::Password);
         togglePasswordAction->setIcon(checked ? eyeOpenedIcon : eyeClosedIcon);
     });
 
-    // Иконка "глазик" для confirmPasswordEdit
     QAction *toggleConfirmPasswordAction = confirmPasswordEdit->addAction(eyeClosedIcon, QLineEdit::TrailingPosition);
     toggleConfirmPasswordAction->setCheckable(true);
-
     connect(toggleConfirmPasswordAction, &QAction::toggled, this, [=](bool checked){
         confirmPasswordEdit->setEchoMode(checked ? QLineEdit::Normal : QLineEdit::Password);
         toggleConfirmPasswordAction->setIcon(checked ? eyeOpenedIcon : eyeClosedIcon);
@@ -87,7 +71,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     createAccountButton->setDefault(true);
     createAccountButton->setCursor(Qt::PointingHandCursor);
 
-    // Собираем layout
+    // Добавляем виджеты в layout
     containerLayout->addWidget(titleLabel);
     containerLayout->addWidget(usernameEdit);
     containerLayout->addWidget(passwordEdit);
@@ -100,29 +84,31 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     mainLayout->addStretch();
     mainLayout->setContentsMargins(0,0,0,0);
 
-    // Общие стили для элементов во всём окне (перекрытие setStyleSheet выше)
+    // Применяем стиль с тёмной темой, как в вашем примере
     setStyleSheet(R"(
-        #formContainer {
-            background: rgba(255, 255, 255, 0.94);
-            border-radius: 20px;
-
+        QDialog {
+            background-color: #2e3440;
+            color: #d8dee9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-
-        #inputField {
-            border: 1.8px solid #ccc;
+        #formContainer {
+            background-color: #3b4252;
             border-radius: 12px;
-            padding: 12px 15px;
-            font-size: 15px;
-            background: white;
-            color: #222;
-
+        }
+        #inputField {
+            background-color: #434c5e;
+            border: 1px solid #4c566a;
+            border-radius: 5px;
+            padding: 6px 8px;
+            color: #eceff4;
+            font-size: 14px;
+            margin-bottom: 10px;
         }
         #inputField:focus {
-            border-color: #667eea;
+            border: 1px solid #88c0d0;
+            background-color: #4c566a;
             outline: none;
-
         }
-
         QPushButton#primaryButton {
             background-color: #667eea;
             color: white;

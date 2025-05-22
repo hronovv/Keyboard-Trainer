@@ -4,41 +4,45 @@
 #include <QLabel>
 #include <QColorDialog>
 #include <QMessageBox>
-#include <QScrollArea>  // добавляем
+#include <QPropertyAnimation>
+#include <QScrollArea>
+#include <QtCore/qabstractanimation.h>
 
 SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     : QWidget(parent), database_(db), username_(username) {
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+
     setStyleSheet(R"(
         QWidget {
-            background-color: #2E2E2E;
-            color: #F0F0F0;
-            font-family: "Arial Black";
-            font-size: 16px;
+            background-color: #2e3440;
+            color: #d8dee9;
+            font-family: Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 14px;
         }
         QLabel {
             font-weight: 600;
             min-width: 200px;
+            color: #d8dee9;
         }
         QSpinBox, QFontComboBox {
-            font-size: 16px;
+            background-color: #3b4252;
+            border: 1px solid #4c566a;
+            border-radius: 5px;
+            padding: 6px 8px;
+            color: #eceff4;
+            font-size: 14px;
             min-width: 150px;
             min-height: 36px;
-            padding: 6px 8px;
-            border: 1px solid #555;
-            border-radius: 5px;
-            background-color: #454545;
-            color: #F0F0F0;
         }
         QSpinBox::up-button, QSpinBox::down-button {
             width: 24px;
             height: 24px;
         }
         QPushButton {
-            background-color: #4CAF50;
-            color: white;
+            background-color: #81a1c1;
+            color: #2e3440;
             font-weight: 700;
-            font-size: 17px;
+            font-size: 15px;
             min-width: 120px;
             min-height: 42px;
             border: none;
@@ -47,42 +51,57 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
             margin: 10px 10px 10px 0;
         }
         QPushButton:hover {
-            background-color: #45a049;
+            background-color: #5e81ac;
         }
         QPushButton:pressed {
-            background-color: #3e8e41;
+            background-color: #4c699a;
         }
         QPushButton#cancelButton {
-            background-color: #d9534f;
+            background-color: #bf616a;
+            color: #eceff4;
         }
         QPushButton#cancelButton:hover {
-            background-color: #c9302c;
+            background-color: #a14c54;
         }
         QPushButton#cancelButton:pressed {
-            background-color: #ac2925;
+            background-color: #843d41;
         }
         QPushButton#colorButton {
             min-width: 150px;
-            background-color: #3a87ad;
+            background-color: #88c0d0;
+            color: #2e3440;
         }
         QPushButton#colorButton:hover {
-            background-color: #337ab7;
+            background-color: #81a1c1;
         }
         QPushButton#colorButton:pressed {
-            background-color: #286090;
+            background-color: #6793a8;
+        }
+        QScrollArea {
+            background-color: transparent;
+        }
+        QScrollBar:vertical {
+            background: #3b4252;
+            width: 10px;
+            margin: 15px 0 15px 0;
+            border-radius: 5px;
+        }
+        QScrollBar::handle:vertical {
+            background: #81a1c1;
+            min-height: 30px;
+            border-radius: 5px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0;
         }
     )");
 
-    // УБРАТЬ setFixedSize(1600, 1600); - чтобы окно могло менять размер
-
-    // Создаем основной layout для виджета с прокруткой (scroll area)
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0,0,0,0);
     mainLayout->setSpacing(0);
 
-    // Создаем виджет контейнер для содержимого
     QWidget *contentWidget = new QWidget;
-    contentWidget->setStyleSheet("background-color: transparent;"); // на всякий случай
+    contentWidget->setStyleSheet("background-color: transparent;");
     QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
     contentLayout->setContentsMargins(40, 30, 40, 30);
     contentLayout->setSpacing(20);
@@ -112,7 +131,7 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
         QColor chosen = QColorDialog::getColor(currentColor_, this, "Выберите цвет текста");
         if (chosen.isValid()) {
             currentColor_ = chosen;
-            colorButton_->setStyleSheet(QString("background-color: %1; color: white; font-weight: 700;")
+            colorButton_->setStyleSheet(QString("background-color: %1; color: #2e3440; font-weight: 700;")
                 .arg(chosen.name()));
         }
     });
@@ -151,10 +170,10 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
 
     contentLayout->addStretch();
 
-    // Создаём QScrollArea и кладём в неё наш contentWidget с настройками
     QScrollArea *scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
     scrollArea->setWidget(contentWidget);
+    scrollArea->setFrameShape(QFrame::NoFrame);
 
     mainLayout->addWidget(scrollArea);
 
@@ -213,7 +232,16 @@ void SettingsWidget::saveSettings() {
 }
 
 void SettingsWidget::cancel() {
-    this->hide();
+    QPropertyAnimation *anim = new QPropertyAnimation(this, "windowOpacity");
+    anim->setDuration(300);
+    anim->setStartValue(1.0);
+    anim->setEndValue(0.0);
+    connect(anim, &QPropertyAnimation::finished, this, [this]() {
+        this->hide();
+        this->setWindowOpacity(1.0); // Чтобы при следующем показе непрозрачность была нормальной
+    });
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+
 }
 
 void SettingsWidget::setUsername(const QString& username) {

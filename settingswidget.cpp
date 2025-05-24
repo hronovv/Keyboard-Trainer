@@ -5,6 +5,7 @@
 #include <QColorDialog>
 #include <QMessageBox>
 #include <QPropertyAnimation>
+#include <QToolButton>
 #include <QScrollArea>
 #include <QtCore/qabstractanimation.h>
 
@@ -16,7 +17,7 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
         QWidget {
             background-color: #2e3440;
             color: #d8dee9;
-            font-family: Tahoma, Geneva, Verdana, sans-serif;
+            font-family: Tahoma, Geneva, Verdana;
             font-size: 14px;
         }
         QLabel {
@@ -100,12 +101,66 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     mainLayout->setContentsMargins(0,0,0,0);
     mainLayout->setSpacing(0);
 
+    // --- Контент с настройками (прокручиваемый) ---
     QWidget *contentWidget = new QWidget;
     contentWidget->setStyleSheet("background-color: transparent;");
     QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
     contentLayout->setContentsMargins(40, 30, 40, 30);
     contentLayout->setSpacing(20);
 
+    // --- Вспомогательная лямбда для создания групп кнопок ---
+    auto createOptionButtons = [&](const QString& labelText, const QString& description, const QStringList& options,
+        QWidget* &widgetHolder, QList<QPushButton*> &buttonGroup, const QString& checkedStyle) -> QVBoxLayout* {
+        QVBoxLayout* vlay = new QVBoxLayout();
+
+        QLabel* headerLabel = new QLabel(labelText);
+        headerLabel->setStyleSheet("font-weight: 700; font-size: 16px; margin-bottom: 3px;");
+        vlay->addWidget(headerLabel);
+
+        QLabel* descLabel = new QLabel(description);
+        descLabel->setStyleSheet("font-weight: 400; font-size: 12px; color: #888;");
+        descLabel->setWordWrap(true);
+        descLabel->setContentsMargins(0,0,0,10);
+        vlay->addWidget(descLabel);
+
+        QHBoxLayout* btnLayout = new QHBoxLayout();
+        btnLayout->setSpacing(8);
+
+        for (const QString& opt : options) {
+            QPushButton* btn = new QPushButton(opt);
+            btn->setCheckable(true);
+            btn->setMinimumHeight(32);
+            btn->setStyleSheet(
+                "QPushButton {"
+                " background-color: #3b4252;"
+                " color: #d8dee9;"
+                " border-radius: 6px;"
+                " padding: 6px 12px;"
+                "}"
+                "QPushButton:hover {"
+                " background-color: #5e81ac;"
+                "}"
+                "QPushButton:checked {"
+                + checkedStyle +
+                "}"
+            );
+            btnLayout->addWidget(btn);
+            buttonGroup.append(btn);
+
+            connect(btn, &QPushButton::clicked, this, [btn, &buttonGroup]() {
+                for (auto b : buttonGroup)
+                    if (b != btn) b->setChecked(false);
+            });
+        }
+
+        vlay->addLayout(btnLayout);
+
+        widgetHolder = new QWidget(this);
+        widgetHolder->setLayout(vlay);
+        return vlay;
+    };
+
+    // --- Настройки ---
     letterSpacingSpinBox_ = new QSpinBox(this);
     letterSpacingSpinBox_->setRange(0, 20);
     wordSpacingSpinBox_ = new QSpinBox(this);
@@ -136,16 +191,7 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
         }
     });
 
-    saveButton_ = new QPushButton("Сохранить", this);
-    saveButton_->setObjectName("saveButton");
-
-    cancelButton_ = new QPushButton("Отмена", this);
-    cancelButton_->setObjectName("cancelButton");
-
-    connect(saveButton_, &QPushButton::clicked, this, &SettingsWidget::saveSettings);
-    connect(cancelButton_, &QPushButton::clicked, this, &SettingsWidget::cancel);
-
-    auto addLabeledWidget = [&](const QString &labelText, QWidget* widget){
+    auto addLabeledWidget = [&](const QString &labelText, QWidget* widget) {
         QHBoxLayout *hlayout = new QHBoxLayout();
         QLabel *label = new QLabel(labelText);
         label->setMinimumWidth(220);
@@ -162,22 +208,88 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     addLabeledWidget("Межстрочный интервал:", lineHeightSpinBox_);
     addLabeledWidget("Цвет текста:", colorButton_);
 
-    QHBoxLayout *buttonsLayout = new QHBoxLayout();
-    buttonsLayout->addStretch();
-    buttonsLayout->addWidget(saveButton_);
-    buttonsLayout->addWidget(cancelButton_);
-    contentLayout->addLayout(buttonsLayout);
+    // --- Кнопки caret ---
+    QWidget* caretSmoothWidget = nullptr;
+    caretSmoothButtons_.clear();
+    createOptionButtons("Caret", "The caret will move smoothly between letters and words.",
+        {"off", "slow", "medium", "fast"}, caretSmoothWidget, caretSmoothButtons_,
+        "background-color: #d08770; color: #2e3440; font-weight: 700;");
 
-    contentLayout->addStretch();
+    QWidget* caretStyleWidget = nullptr;
+    caretStyleButtons_.clear();
+    createOptionButtons("Caret style", "Change the style of the caret during the test.",
+        {"off", "▮", "▯", "_"}, caretStyleWidget, caretStyleButtons_,
+        "background-color: #ebcb8b; color: #2e3440; font-weight: 700;");
 
+    // Контейнер для сворачиваемых настроек caret
+    QWidget* caretSettingsContainer = new QWidget(this);
+    QVBoxLayout* caretSettingsLayout = new QVBoxLayout(caretSettingsContainer);
+    caretSettingsLayout->setContentsMargins(0, 0, 0, 0);
+    caretSettingsLayout->setSpacing(10);
+    caretSettingsLayout->addWidget(caretSmoothWidget);
+    caretSettingsLayout->addWidget(caretStyleWidget);
+
+    // Кнопка сворачивания
+    QToolButton* toggleCaretButton = new QToolButton(this);
+    toggleCaretButton->setText("Caret settings");
+    toggleCaretButton->setCheckable(true);
+    toggleCaretButton->setChecked(true);
+    toggleCaretButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toggleCaretButton->setArrowType(Qt::DownArrow);
+
+    connect(toggleCaretButton, &QToolButton::toggled, this, [caretSettingsContainer, toggleCaretButton](bool checked){
+        caretSettingsContainer->setVisible(checked);
+        toggleCaretButton->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
+    });
+
+    // Добавляем кнопку и контейнер caret настроек в contentLayout
+    contentLayout->addWidget(toggleCaretButton);
+    contentLayout->addWidget(caretSettingsContainer);
+
+    // Прокручиваемая область с настройками
     QScrollArea *scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
     scrollArea->setWidget(contentWidget);
     scrollArea->setFrameShape(QFrame::NoFrame);
 
-    mainLayout->addWidget(scrollArea);
+    // --- Кнопки сохранения и отмены (фиксированы внизу) ---
+    QWidget *buttonsWidget = new QWidget(this);
+    QHBoxLayout *buttonsLayout = new QHBoxLayout(buttonsWidget);
+    buttonsLayout->setContentsMargins(40, 20, 40, 30);
+    buttonsLayout->setSpacing(10);
+
+    saveButton_ = new QPushButton("Сохранить", this);
+    saveButton_->setObjectName("saveButton");
+    cancelButton_ = new QPushButton("Отмена", this);
+    cancelButton_->setObjectName("cancelButton");
+
+    buttonsLayout->addWidget(saveButton_);
+    buttonsLayout->addStretch();
+    buttonsLayout->addWidget(cancelButton_);
+
+    // Добавляем все в главный layout
+    mainLayout->addWidget(scrollArea, 1); // stretch для прокрутки
+    mainLayout->addWidget(buttonsWidget, 0); // кнопки фиксированной высоты снизу
+
+    // Подключение сигналов для кнопок
+    connect(saveButton_, &QPushButton::clicked, this, [this]() {
+        if (username_.isEmpty()) {
+            QMessageBox::warning(this, "Ошибка", "Пользователь не выбран");
+            return;
+        }
+        saveSettings();
+    });
+
+    connect(cancelButton_, &QPushButton::clicked, this, &SettingsWidget::cancel);
 
     loadSettings();
+}
+
+QString SettingsWidget::getCheckedButtonValue(const QList<QPushButton*> &buttons) const {
+    for (QPushButton* btn : buttons)
+        if (btn->isChecked())
+            return btn->text();
+    return QString();
 }
 
 void SettingsWidget::applySettingsToUI(const UserSettings &settings) {
@@ -189,6 +301,12 @@ void SettingsWidget::applySettingsToUI(const UserSettings &settings) {
     lineHeightSpinBox_->setValue(settings.line_height);
     currentColor_ = settings.font_color;
     colorButton_->setStyleSheet(QString("background-color: %1").arg(currentColor_.name()));
+    for (QPushButton* btn : caretSmoothButtons_) {
+        btn->setChecked(btn->text() == settings.caret_smooth);
+    }
+    for (QPushButton* btn : caretStyleButtons_) {
+        btn->setChecked(btn->text() == settings.caret_style);
+    }
 }
 
 UserSettings SettingsWidget::getSettingsFromUI() const {
@@ -200,6 +318,8 @@ UserSettings SettingsWidget::getSettingsFromUI() const {
     s.font_weight = fontWeightSpinBox_->value();
     s.line_height = lineHeightSpinBox_->value();
     s.font_color = currentColor_;
+    s.caret_smooth = getCheckedButtonValue(caretSmoothButtons_);
+    s.caret_style = getCheckedButtonValue(caretStyleButtons_);
     return s;
 }
 
@@ -223,6 +343,8 @@ void SettingsWidget::saveSettings() {
     success &= database_.updateUserSetting(username_, "word_spacing", s.word_spacing);
     success &= database_.updateUserSetting(username_, "font_weight", s.font_weight);
     success &= database_.updateUserSetting(username_, "line_height", s.line_height);
+    success &= database_.updateUserSetting(username_, "caret_smooth", s.caret_smooth);
+    success &= database_.updateUserSetting(username_, "caret_style", s.caret_style);
     if (!success) {
         QMessageBox::warning(this, "Ошибка", "Не удалось сохранить настройки");
         return;

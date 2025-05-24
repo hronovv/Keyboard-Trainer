@@ -89,7 +89,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
         QDialog {
             background-color: #2e3440;
             color: #d8dee9;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana;
         }
         #formContainer {
             background-color: #3b4252;

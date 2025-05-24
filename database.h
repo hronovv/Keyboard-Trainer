@@ -14,6 +14,8 @@ struct UserSettings {
     int word_spacing;
     int font_weight;
     int line_height;
+    QString caret_smooth;
+    QString caret_style;
 };
 
 class Database : public QObject

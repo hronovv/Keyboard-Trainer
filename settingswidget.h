@@ -5,6 +5,7 @@
 #include <QSpinBox>
 #include <QFontComboBox>
 #include <QPushButton>
+#include <QList>
 #include "database.h"
 
 class SettingsWidget : public QWidget {
@@ -37,8 +38,13 @@ private:
     QPushButton *saveButton_;
     QPushButton *cancelButton_;
 
+
+    QList<QPushButton*> caretSmoothButtons_;
+    QList<QPushButton*> caretStyleButtons_;
+
     void applySettingsToUI(const UserSettings &settings);
     UserSettings getSettingsFromUI() const;
+    QString getCheckedButtonValue(const QList<QPushButton*> &buttons) const;
 };
 
 #endif // SETTINGSWIDGET_H

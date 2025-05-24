@@ -37,7 +37,9 @@ bool Database::initDatabase() {
                "letter_spacing INTEGER DEFAULT 2, "
                "word_spacing INTEGER DEFAULT 2, "
                "font_weight INTEGER DEFAULT 500, "
-               "line_height INTEGER DEFAULT 20"
+               "line_height INTEGER DEFAULT 20,"
+               "caret_smooth TEXT DEFAULT off,"
+               "caree_style TEXT DEFAULT ▮"
                ")");
     if (!ok) {
         qDebug() << "Error creating table:" << query.lastError().text();
@@ -87,7 +89,7 @@ bool Database::userExists(const QString &username) {
 
 bool Database::updateUserSetting(const QString &username, const QString &settingName, const QVariant &value) {
     static const QSet<QString> allowedColumns = {"font", "font_color", "font_size", "letter_spacing",
-        "word_spacing", "font_weight", "line_height"};
+        "word_spacing", "font_weight", "line_height","caret_smooth", "caret_style"};
     if (!allowedColumns.contains(settingName)) {
         qDebug() << "Invalid setting name:" << settingName;
         return false;
@@ -115,7 +117,7 @@ UserSettings Database::getUserSettings(const QString &username) {
     UserSettings settings;
     QSqlQuery query(db);
     query.prepare("SELECT font, font_color, font_size, letter_spacing, word_spacing, font_weight, "
-                  "line_height FROM users WHERE username = :username LIMIT 1");
+                  "line_height, caret_smooth, caret_style FROM users WHERE username = :username LIMIT 1");
     query.bindValue(":username", username);
 
     if (query.exec() && query.next()) {
@@ -126,6 +128,8 @@ UserSettings Database::getUserSettings(const QString &username) {
         settings.word_spacing = query.value(4).toInt();
         settings.font_weight = query.value(5).toInt();
         settings.line_height = query.value(6).toInt();
+        settings.caret_smooth = query.value(7).toString();
+        settings.caret_style = query.value(8).toString();
     } else {
         qDebug() << "Failed to get user settings:" << query.lastError().text();
     }

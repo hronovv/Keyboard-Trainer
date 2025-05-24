@@ -111,6 +111,8 @@ Window::Window(Database &db, QWidget *parent)
                 { "ai", [this]() { Prompt(); } },
                 { "language", [this]() { ShowLanguageDialog(); } },
                 { "stop", [this]() { DisableTyping(); } },
+                { "stats", [this]() { ShowStats(); } },
+                { "quote", [this]() { random(); } },
             };
 
             connect(button, &QPushButton::clicked, this, [this, text, actions]() {
@@ -129,9 +131,10 @@ Window::Window(Database &db, QWidget *parent)
     addCategoryWidget("numbers");
     addCategoryWidget("time");
     addCategoryWidget("words", true);
-    addCategoryWidget("quote");
+    addCategoryWidget("quote",true);
     addCategoryWidget("custom", true);
     addCategoryWidget("stop", true);
+    addCategoryWidget("stats", true);
 
     categoryWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 
@@ -179,6 +182,7 @@ Window::Window(Database &db, QWidget *parent)
         }
         QLabel {
             color: #d8dee9;
+            background: transparent
         }
         QLabel#statusLabel {
             font-size: 20px;
@@ -197,6 +201,11 @@ Window::Window(Database &db, QWidget *parent)
             border-radius: 10px;
             padding-left: 15px;
             padding-right: 15px;
+        }
+        QCheckBox {
+        background-color: transparent;
+        color: #d8dee9;
+        font-size: 14px;
         }
     )";
     setStyleSheet(globalStyle);
@@ -403,6 +412,16 @@ void Window::keyPressEvent(QKeyEvent* event) {
 
     if (currentIndex_ == targetText_.length()) {
         typing_allowed_ = false;
+        double minutes = elapsed_seconds_ / kSecondsInMinute;
+        double raw_wpm = (typedCharCount_ / kWpmCoefficient) / minutes;
+        double accuracy = kHundred - ((double)errorCount_ / targetText_.length() * kHundred);
+        accuracy = qMax(accuracy, 0.0);
+
+
+        if (!currentUsername_.isEmpty()) {
+            database_.saveTypingSession(currentUsername_, raw_wpm * accuracy / kHundred, accuracy);
+        }
+
         StopTypingTimer();
     }
 }
@@ -714,4 +733,164 @@ void Window::GenerateNewTextFromWordList() {
 
     generated_text_->setText(newSelection.join(' '));
     ResetText();
+}
+
+void Window::ShowStats() {
+    if (currentUsername_.isEmpty()) {
+        QMessageBox::information(this, "Инфо", "Сначала войдите в систему");
+        return;
+    }
+
+    QVector<QPair<QDateTime, double>> sessions = database_.getTypingSessionsForUser(currentUsername_);
+    if (sessions.isEmpty()) {
+        QMessageBox::information(this, "Статистика", "Нет данных о тестах для пользователя");
+        return;
+    }
+
+    QDialog *dialog = new QDialog(this);
+    dialog->setWindowTitle("Статистика скорости печати");
+    dialog->setModal(true);
+
+    QRect screen_geometry = this->screen()->geometry();
+    int width = static_cast<int>(screen_geometry.width() * 0.9);
+    int height = static_cast<int>(screen_geometry.height() * 0.9);
+    dialog->setFixedSize(width, height);
+
+    dialog->setStyleSheet(R"(
+        QDialog {
+            background-color: #2e3440;
+            color: #d8dee9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana;
+        }
+        QCheckBox {
+            color: #d8dee9;
+            font-size: 14px;
+        }
+    )");
+
+    // Исходные данные - белая линия
+    QLineSeries *series = new QLineSeries();
+    for (int i = 0; i < sessions.size(); ++i) {
+        series->append(i + 1, sessions[i].second);
+    }
+
+    // Рассчёт скользящего среднего (moving average)
+    int windowSize = 10;
+    QLineSeries *movingAvgSeries = new QLineSeries();
+    for (int i = 0; i < sessions.size(); ++i) {
+        int startIdx = qMax(0, i - windowSize + 1);
+        int count = i - startIdx + 1;
+        double sum = 0;
+        for (int j = startIdx; j <= i; ++j) {
+            sum += sessions[j].second;
+        }
+        double avg = sum / count;
+        movingAvgSeries->append(i + 1, avg);
+    }
+
+    QChart *chart = new QChart();
+    chart->addSeries(series);
+    chart->addSeries(movingAvgSeries);
+
+    chart->setTitle("Скорость печати (WPM) по номерам тестов");
+    chart->setTitleBrush(QBrush(Qt::white));
+    chart->legend()->hide();
+    chart->setBackgroundBrush(QBrush(QColor("#3b4252")));
+
+    QValueAxis *axisX = new QValueAxis();
+    axisX->setRange(1, sessions.size());
+    axisX->setLabelFormat("%d");
+    axisX->setTitleText("Номер теста");
+    axisX->setTitleBrush(QBrush(Qt::white));
+    axisX->setLabelsBrush(QBrush(Qt::white));
+    axisX->setTickCount(qMin(sessions.size(), 10));
+    axisX->setGridLineVisible(true);
+    axisX->setGridLinePen(QPen(QColor("#434c5e"), 1, Qt::DashLine));
+
+    double maxWpm = 0;
+    for (const auto &p : sessions) {
+        if (p.second > maxWpm)
+            maxWpm = p.second;
+    }
+
+    QValueAxis *axisY = new QValueAxis();
+    axisY->setRange(0, maxWpm + 10);
+    axisY->setTitleText("Скорость (WPM)");
+    axisY->setTitleBrush(QBrush(Qt::white));
+    axisY->setLabelsBrush(QBrush(Qt::white));
+    axisY->setGridLineVisible(true);
+    axisY->setGridLinePen(QPen(QColor("#434c5e"), 1, Qt::DashLine));
+
+    chart->addAxis(axisX, Qt::AlignBottom);
+    chart->addAxis(axisY, Qt::AlignLeft);
+
+    series->attachAxis(axisX);
+    series->attachAxis(axisY);
+    movingAvgSeries->attachAxis(axisX);
+    movingAvgSeries->attachAxis(axisY);
+
+    QColor whiteColor(255, 255, 255, 150); // частичная прозрачность
+    QPen penWhite(whiteColor);
+    penWhite.setWidth(2);
+    series->setPen(penWhite);
+    series->setPointsVisible(false);
+
+    QPen penYellow(QColor("#ffdd00"));
+    penYellow.setWidth(4);
+    movingAvgSeries->setPen(penYellow);
+    movingAvgSeries->setPointsVisible(false);
+
+    QChartView *chartView = new QChartView(chart);
+    chartView->setRenderHint(QPainter::Antialiasing);
+    chartView->setStyleSheet("background-color: transparent;");
+
+    // Чекбоксы
+    QCheckBox *cbRaw = new QCheckBox("Show raw speed", dialog);
+    cbRaw->setChecked(true);
+    QCheckBox *cbAvg = new QCheckBox("Show average speed", dialog);
+    cbAvg->setChecked(true);
+
+    // Контейнер для расположения элементов: чекбоксов сверху и графика ниже
+    QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+    // Горизонтальный layout для чекбоксов
+    QHBoxLayout *checkBoxLayout = new QHBoxLayout();
+    checkBoxLayout->addWidget(cbRaw);
+    checkBoxLayout->addWidget(cbAvg);
+    checkBoxLayout->addStretch();
+
+    mainLayout->addLayout(checkBoxLayout);
+    mainLayout->addWidget(chartView);
+
+    // Слот для обновления видимости линий по чекбоксам
+    auto updateVisibility = [series, movingAvgSeries, cbRaw, cbAvg]() {
+        series->setVisible(cbRaw->isChecked());
+        movingAvgSeries->setVisible(cbAvg->isChecked());
+    };
+
+    // Подключаем сигналы к слоту
+    QObject::connect(cbRaw, &QCheckBox::toggled, dialog, updateVisibility);
+    QObject::connect(cbAvg, &QCheckBox::toggled, dialog, updateVisibility);
+
+    // Вызвать однократно для установки начального состояния
+    updateVisibility();
+
+    dialog->move(
+        (screen_geometry.width() - dialog->width()) / 2,
+        (screen_geometry.height() - dialog->height()) / 2);
+
+    dialog->setWindowOpacity(0);
+    dialog->show();
+
+    QPropertyAnimation *anim = new QPropertyAnimation(dialog, "windowOpacity");
+    anim->setDuration(300);
+    anim->setStartValue(0);
+    anim->setEndValue(1);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+void Window::random() {
+    for (int i = 0; i < 100; i++) {
+        double randNumber = 120+QRandomGenerator::global()->bounded(15.5);
+        double randAccuracy = QRandomGenerator::global()->bounded(100.0);
+        database_.saveTypingSession(currentUsername_,randNumber,randAccuracy);
+    }
 }

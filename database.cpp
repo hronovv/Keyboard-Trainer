@@ -39,10 +39,25 @@ bool Database::initDatabase() {
                "font_weight INTEGER DEFAULT 500, "
                "line_height INTEGER DEFAULT 20,"
                "caret_smooth TEXT DEFAULT off,"
-               "caree_style TEXT DEFAULT ▮"
+               "caret_style TEXT DEFAULT ▮"
                ")");
     if (!ok) {
         qDebug() << "Error creating table:" << query.lastError().text();
+        return false;
+    }
+
+    ok = query.exec(R"(
+        CREATE TABLE IF NOT EXISTS typing_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            session_date DATETIME DEFAULT (datetime('now', 'localtime')),
+            wpm REAL NOT NULL,
+            accuracy REAL NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    )");
+    if (!ok) {
+        qDebug() << "Error creating typing_sessions table:" << query.lastError().text();
         return false;
     }
 
@@ -135,4 +150,54 @@ UserSettings Database::getUserSettings(const QString &username) {
     }
 
     return settings;
+}
+
+bool Database::saveTypingSession(const QString &username, double wpm, double accuracy) {
+    QSqlQuery query(db);
+    query.prepare("SELECT id FROM users WHERE username = :username");
+    query.bindValue(":username", username);
+    if (!query.exec() || !query.next()) {
+        qDebug() << "User not found for saving session:" << query.lastError().text();
+        return false;
+    }
+
+    int user_id = query.value(0).toInt();
+
+    // Вставляем новую запись
+    query.prepare("INSERT INTO typing_sessions (user_id, wpm, accuracy) VALUES (:user_id, :wpm, :accuracy)");
+    query.bindValue(":user_id", user_id);
+    query.bindValue(":wpm", wpm);
+    query.bindValue(":accuracy", accuracy);
+
+    if (!query.exec()) {
+        qDebug() << "Failed to save typing session:" << query.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+QVector<QPair<QDateTime, double>> Database::getTypingSessionsForUser(const QString &username) {
+    QVector<QPair<QDateTime, double>> result;
+
+    QSqlQuery query(db);
+    query.prepare(R"(
+        SELECT ts.session_date, ts.wpm
+        FROM typing_sessions ts
+        JOIN users u ON ts.user_id = u.id
+        WHERE u.username = :username
+        ORDER BY ts.session_date ASC
+    )");
+    query.bindValue(":username", username);
+
+    if (query.exec()) {
+        while (query.next()) {
+            QDateTime date = query.value(0).toDateTime();
+            double wpm = query.value(1).toDouble();
+            result.append(qMakePair(date, wpm));
+        }
+    } else {
+        qDebug() << "Failed to get typing sessions:" << query.lastError().text();
+    }
+
+    return result;
 }

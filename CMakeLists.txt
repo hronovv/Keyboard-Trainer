@@ -12,6 +12,7 @@ find_package(Qt6 COMPONENTS
         Widgets
         Sql
         SvgWidgets
+        Charts
         REQUIRED)
 
 find_package(CURL REQUIRED)
@@ -34,7 +35,7 @@ add_executable(Keyboard_Trainer main.cpp
 )
 
 target_link_libraries(Keyboard_Trainer
-        Qt::Core Qt::Gui Qt::Widgets Qt::Sql Qt::SvgWidgets
+        Qt::Core Qt::Gui Qt::Widgets Qt::Sql Qt::SvgWidgets Qt::Charts
         ${CURL_LIBRARIES}
 )
 

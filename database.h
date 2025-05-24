@@ -31,6 +31,9 @@ public:
     bool userExists(const QString &username);
     bool updateUserSetting(const QString &username, const QString &settingName, const QVariant &value);
     UserSettings getUserSettings(const QString &username);
+    bool saveTypingSession(const QString &username, double wpm, double accuracy);
+    QVector<QPair<QDateTime, double>> getTypingSessionsForUser(const QString &username);
+
 
 private:
     QSqlDatabase db;

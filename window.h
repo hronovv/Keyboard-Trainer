@@ -24,6 +24,10 @@
 #include <QToolButton>
 #include <QCheckBox>
 #include <QColorDialog>
+#include <QtCharts/QChartView>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QDateTimeAxis>
+#include <QtCharts/QValueAxis>
 #include <QTimer>
 #include <QJsonArray>
 #include <QJsonParseError>
@@ -124,6 +128,8 @@ private slots:
     void showLoginDialog();
     void ShowSettings();
     void ShowWordSetDialog();
+    void ShowStats();
+    void random();
 
 private:
     // Typing related methods

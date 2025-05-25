@@ -43,6 +43,14 @@ Window::Window(Database &db, QWidget *parent)
     statusLabel_->setObjectName("statusLabel");
     statusLabel_->setAlignment(Qt::AlignBottom | Qt::AlignCenter);
 
+
+    keyboardWidget_ = new KeyboardWidget(this);
+    connect(keyboardWidget_, &KeyboardWidget::spaceKeyClicked, this, &Window::ShowKeyboardLayoutDialog);
+    QString keyboardLayoutPath = "/Users/hronov/Documents/Keyboard Trainer/keyboard_layouts/qwerty.json";
+    if (!keyboardWidget_->loadLayoutFromJson(keyboardLayoutPath)) {
+        qWarning() << "Failed to load keyboard layout from json";
+    }
+
     // --- Кнопки настроек и входа ---
     auto settings_button = new QPushButton(this);
     settings_button->setStyleSheet("border: none; background: transparent;");
@@ -147,11 +155,15 @@ Window::Window(Database &db, QWidget *parent)
     auto main_layout = new QVBoxLayout(this);
     main_layout->addLayout(bottomLayout);
     main_layout->addLayout(categoryWrapperLayout);
-    main_layout->addSpacing(20);
+    main_layout->addSpacing(50);
     main_layout->addWidget(generated_text_, 0, Qt::AlignHCenter);
-    main_layout->addWidget(statusLabel_);
+    main_layout->addWidget(keyboardWidget_, 0, Qt::AlignHCenter);
+    main_layout->addSpacing(20);  // небольшой отступ между клавиатурой и скоростью
+    main_layout->addWidget(statusLabel_, 0, Qt::AlignHCenter);
     main_layout->addStretch();
+    main_layout->setContentsMargins(10, 10, 10, 20);
     main_layout->setAlignment(Qt::AlignTop);
+
 
     setLayout(main_layout);
 
@@ -341,6 +353,7 @@ void Window::keyPressEvent(QKeyEvent* event) {
 
     if (event->key() == Qt::Key_Tab && wordsModeActive_) {
         event->accept();
+        keyboardWidget_->clearHighlight();
         GenerateNewTextFromWordList();
         return;
     }
@@ -353,6 +366,12 @@ void Window::keyPressEvent(QKeyEvent* event) {
             typedChars_[currentIndex_] = '|';
             errorFlags_[currentIndex_] = false;
             typedCharCount_--;
+            if (currentIndex_ < targetText_.length()) {
+                QChar nextChar = targetText_.at(currentIndex_);
+                keyboardWidget_->highlightKey(nextChar);
+            } else {
+                keyboardWidget_->clearHighlight();
+            }
         }
     } else {
         const QString new_text = event->text();
@@ -372,6 +391,12 @@ void Window::keyPressEvent(QKeyEvent* event) {
 
             typedChars_[currentIndex_] = typed_char;
             currentIndex_++;
+            if (currentIndex_ < targetText_.length()) {
+                QChar nextChar = targetText_.at(currentIndex_);
+                keyboardWidget_->highlightKey(nextChar);
+            } else {
+                keyboardWidget_->clearHighlight();
+            }
         }
     }
 
@@ -423,6 +448,7 @@ void Window::keyPressEvent(QKeyEvent* event) {
         }
 
         StopTypingTimer();
+        keyboardWidget_->clearHighlight();
     }
 }
 
@@ -498,6 +524,8 @@ void Window::LoadUserSettings() {
     lineHeight_ = settings.line_height;
     caretSmooth_ = caretMap.value(settings.caret_smooth);
     caretStyle_ = settings.caret_style;
+    keyboardWidget_->loadLayoutFromJson("/Users/hronov/Documents/Keyboard Trainer/keyboard_layouts/" +
+        settings.keyboard_layout + ".json");
 
 
     ApplyTextStyles();
@@ -741,14 +769,14 @@ void Window::ShowStats() {
         return;
     }
 
-    QVector<QPair<QDateTime, double>> sessions = database_.getTypingSessionsForUser(currentUsername_);
+    QVector<QPair<QDateTime, QPair<double,double>>> sessions = database_.getTypingSessionsForUser(currentUsername_);
     if (sessions.isEmpty()) {
         QMessageBox::information(this, "Статистика", "Нет данных о тестах для пользователя");
         return;
     }
 
     QDialog *dialog = new QDialog(this);
-    dialog->setWindowTitle("Статистика скорости печати");
+    dialog->setWindowTitle("Статистика скорости печати и точности");
     dialog->setModal(true);
 
     QRect screen_geometry = this->screen()->geometry();
@@ -768,110 +796,188 @@ void Window::ShowStats() {
         }
     )");
 
-    // Исходные данные - белая линия
-    QLineSeries *series = new QLineSeries();
-    for (int i = 0; i < sessions.size(); ++i) {
-        series->append(i + 1, sessions[i].second);
-    }
+    QWidget *contentWidget = new QWidget(dialog);
+    QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+    contentLayout->setContentsMargins(20, 20, 20, 20);
+    contentLayout->setSpacing(20);
 
-    // Рассчёт скользящего среднего (moving average)
-    int windowSize = 10;
-    QLineSeries *movingAvgSeries = new QLineSeries();
+    // --- График скорости ---
+    QLineSeries *speedSeries = new QLineSeries();
+    QLineSeries *speedMovingAvgSeries = new QLineSeries();
+    for (int i = 0; i < sessions.size(); ++i) {
+        speedSeries->append(i + 1, sessions[i].second.first);
+    }
+    int windowSize = 10; // скользящее среднее
     for (int i = 0; i < sessions.size(); ++i) {
         int startIdx = qMax(0, i - windowSize + 1);
         int count = i - startIdx + 1;
         double sum = 0;
         for (int j = startIdx; j <= i; ++j) {
-            sum += sessions[j].second;
+            sum += sessions[j].second.first;
         }
         double avg = sum / count;
-        movingAvgSeries->append(i + 1, avg);
+        speedMovingAvgSeries->append(i + 1, avg);
     }
 
-    QChart *chart = new QChart();
-    chart->addSeries(series);
-    chart->addSeries(movingAvgSeries);
+    QChart *speedChart = new QChart();
+    speedChart->addSeries(speedSeries);
+    speedChart->addSeries(speedMovingAvgSeries);
+    speedChart->setTitle("Скорость печати (WPM) по тестам");
+    speedChart->setTitleBrush(QBrush(Qt::white));
+    speedChart->legend()->hide();
+    speedChart->setBackgroundBrush(QBrush(QColor("#3b4252")));
 
-    chart->setTitle("Скорость печати (WPM) по номерам тестов");
-    chart->setTitleBrush(QBrush(Qt::white));
-    chart->legend()->hide();
-    chart->setBackgroundBrush(QBrush(QColor("#3b4252")));
+    QValueAxis *axisXSpeed = new QValueAxis();
+    axisXSpeed->setRange(1, sessions.size());
+    axisXSpeed->setLabelFormat("%d");
+    axisXSpeed->setTitleText("Номер теста");
+    axisXSpeed->setLabelsBrush(QBrush(Qt::white));
+    axisXSpeed->setTitleBrush(QBrush(Qt::white));
+    axisXSpeed->setTickCount(qMin(sessions.size(), 10));
+    axisXSpeed->setGridLineVisible(true);
+    axisXSpeed->setGridLinePen(QPen(QColor("#434c5e"), 1, Qt::DashLine));
 
-    QValueAxis *axisX = new QValueAxis();
-    axisX->setRange(1, sessions.size());
-    axisX->setLabelFormat("%d");
-    axisX->setTitleText("Номер теста");
-    axisX->setTitleBrush(QBrush(Qt::white));
-    axisX->setLabelsBrush(QBrush(Qt::white));
-    axisX->setTickCount(qMin(sessions.size(), 10));
-    axisX->setGridLineVisible(true);
-    axisX->setGridLinePen(QPen(QColor("#434c5e"), 1, Qt::DashLine));
+    double maxSpeed = 0;
+    for (const auto &p : sessions)
+        if (p.second.first > maxSpeed)
+            maxSpeed = p.second.first;
 
-    double maxWpm = 0;
-    for (const auto &p : sessions) {
-        if (p.second > maxWpm)
-            maxWpm = p.second;
-    }
+    QValueAxis *axisYSpeed = new QValueAxis();
+    axisYSpeed->setRange(0, maxSpeed + 10);
+    axisYSpeed->setTitleText("Скорость (WPM)");
+    axisYSpeed->setLabelsBrush(QBrush(Qt::white));
+    axisYSpeed->setTitleBrush(QBrush(Qt::white));
+    axisYSpeed->setGridLineVisible(true);
+    axisYSpeed->setGridLinePen(QPen(QColor("#434c5e"), 1, Qt::DashLine));
 
-    QValueAxis *axisY = new QValueAxis();
-    axisY->setRange(0, maxWpm + 10);
-    axisY->setTitleText("Скорость (WPM)");
-    axisY->setTitleBrush(QBrush(Qt::white));
-    axisY->setLabelsBrush(QBrush(Qt::white));
-    axisY->setGridLineVisible(true);
-    axisY->setGridLinePen(QPen(QColor("#434c5e"), 1, Qt::DashLine));
+    speedChart->addAxis(axisXSpeed, Qt::AlignBottom);
+    speedChart->addAxis(axisYSpeed, Qt::AlignLeft);
 
-    chart->addAxis(axisX, Qt::AlignBottom);
-    chart->addAxis(axisY, Qt::AlignLeft);
+    speedSeries->attachAxis(axisXSpeed);
+    speedSeries->attachAxis(axisYSpeed);
+    speedMovingAvgSeries->attachAxis(axisXSpeed);
+    speedMovingAvgSeries->attachAxis(axisYSpeed);
 
-    series->attachAxis(axisX);
-    series->attachAxis(axisY);
-    movingAvgSeries->attachAxis(axisX);
-    movingAvgSeries->attachAxis(axisY);
-
-    QColor whiteColor(255, 255, 255, 150); // частичная прозрачность
+    QColor whiteColor(255, 255, 255, 150);
     QPen penWhite(whiteColor);
     penWhite.setWidth(2);
-    series->setPen(penWhite);
-    series->setPointsVisible(false);
+    speedSeries->setPen(penWhite);
+    speedSeries->setPointsVisible(false);
 
     QPen penYellow(QColor("#ffdd00"));
     penYellow.setWidth(4);
-    movingAvgSeries->setPen(penYellow);
-    movingAvgSeries->setPointsVisible(false);
+    speedMovingAvgSeries->setPen(penYellow);
+    speedMovingAvgSeries->setPointsVisible(false);
 
-    QChartView *chartView = new QChartView(chart);
-    chartView->setRenderHint(QPainter::Antialiasing);
-    chartView->setStyleSheet("background-color: transparent;");
+    QChartView *speedChartView = new QChartView(speedChart);
+    speedChartView->setRenderHint(QPainter::Antialiasing);
+    speedChartView->setStyleSheet("background-color: transparent;");
+    speedChartView->setMinimumHeight(350);
 
-    // Чекбоксы
-    QCheckBox *cbRaw = new QCheckBox("Show raw speed", dialog);
-    cbRaw->setChecked(true);
-    QCheckBox *cbAvg = new QCheckBox("Show average speed", dialog);
-    cbAvg->setChecked(true);
+    // --- График точности ---
+    QLineSeries *accSeries = new QLineSeries();
+    QLineSeries *accMovingAvgSeries = new QLineSeries();
+    for (int i = 0; i < sessions.size(); ++i) {
+        accSeries->append(i + 1, sessions[i].second.second);
+    }
+    for (int i = 0; i < sessions.size(); ++i) {
+        int startIdx = qMax(0, i - windowSize + 1);
+        int count = i - startIdx + 1;
+        double sum = 0;
+        for (int j = startIdx; j <= i; ++j) {
+            sum += sessions[j].second.second;
+        }
+        double avg = sum / count;
+        accMovingAvgSeries->append(i + 1, avg);
+    }
 
-    // Контейнер для расположения элементов: чекбоксов сверху и графика ниже
-    QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-    // Горизонтальный layout для чекбоксов
-    QHBoxLayout *checkBoxLayout = new QHBoxLayout();
-    checkBoxLayout->addWidget(cbRaw);
-    checkBoxLayout->addWidget(cbAvg);
-    checkBoxLayout->addStretch();
+    QChart *accChart = new QChart();
+    accChart->addSeries(accSeries);
+    accChart->addSeries(accMovingAvgSeries);
+    accChart->setTitle("Точность (%) по тестам");
+    accChart->setTitleBrush(QBrush(Qt::white));
+    accChart->legend()->hide();
+    accChart->setBackgroundBrush(QBrush(QColor("#3b4252")));
 
-    mainLayout->addLayout(checkBoxLayout);
-    mainLayout->addWidget(chartView);
+    QValueAxis *axisXAcc = new QValueAxis();
+    axisXAcc->setRange(1, sessions.size());
+    axisXAcc->setLabelFormat("%d");
+    axisXAcc->setTitleText("Номер теста");
+    axisXAcc->setLabelsBrush(QBrush(Qt::white));
+    axisXAcc->setTitleBrush(QBrush(Qt::white));
+    axisXAcc->setTickCount(qMin(sessions.size(), 10));
+    axisXAcc->setGridLineVisible(true);
+    axisXAcc->setGridLinePen(QPen(QColor("#434c5e"), 1, Qt::DashLine));
 
-    // Слот для обновления видимости линий по чекбоксам
-    auto updateVisibility = [series, movingAvgSeries, cbRaw, cbAvg]() {
-        series->setVisible(cbRaw->isChecked());
-        movingAvgSeries->setVisible(cbAvg->isChecked());
+    QValueAxis *axisYAcc = new QValueAxis();
+    axisYAcc->setRange(0, 100);
+    axisYAcc->setTitleText("Точность (%)");
+    axisYAcc->setLabelsBrush(QBrush(Qt::white));
+    axisYAcc->setTitleBrush(QBrush(Qt::white));
+    axisYAcc->setGridLineVisible(true);
+    axisYAcc->setGridLinePen(QPen(QColor("#434c5e"), 1, Qt::DashLine));
+
+    accChart->addAxis(axisXAcc, Qt::AlignBottom);
+    accChart->addAxis(axisYAcc, Qt::AlignLeft);
+
+    accSeries->attachAxis(axisXAcc);
+    accSeries->attachAxis(axisYAcc);
+    accMovingAvgSeries->attachAxis(axisXAcc);
+    accMovingAvgSeries->attachAxis(axisYAcc);
+
+    accSeries->setPen(penWhite);
+    accSeries->setPointsVisible(false);
+    accMovingAvgSeries->setPen(penYellow);
+    accMovingAvgSeries->setPointsVisible(false);
+
+    QChartView *accChartView = new QChartView(accChart);
+    accChartView->setRenderHint(QPainter::Antialiasing);
+    accChartView->setStyleSheet("background-color: transparent;");
+    accChartView->setMinimumHeight(350);
+
+    // --- Чекбоксы для управления видимостью ---
+    QCheckBox *cbSpeedRaw = new QCheckBox("Показать скорость (сырые данные)", dialog);
+    cbSpeedRaw->setChecked(true);
+    QCheckBox *cbSpeedAvg = new QCheckBox("Показать скорость (скользящее среднее)", dialog);
+    cbSpeedAvg->setChecked(true);
+
+    QCheckBox *cbAccRaw = new QCheckBox("Показать точность (сырые данные)", dialog);
+    cbAccRaw->setChecked(true);
+    QCheckBox *cbAccAvg = new QCheckBox("Показать точность (скользящее среднее)", dialog);
+    cbAccAvg->setChecked(true);
+
+    contentLayout->addWidget(cbSpeedRaw);
+    contentLayout->addWidget(cbSpeedAvg);
+    contentLayout->addWidget(speedChartView);
+
+    contentLayout->addSpacing(20);
+
+    contentLayout->addWidget(cbAccRaw);
+    contentLayout->addWidget(cbAccAvg);
+    contentLayout->addWidget(accChartView);
+
+    QScrollArea *scrollArea = new QScrollArea(dialog);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setWidget(contentWidget);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+
+    QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+    dialogLayout->addWidget(scrollArea);
+
+    auto updateVisibility = [speedSeries, speedMovingAvgSeries,
+                             accSeries, accMovingAvgSeries,
+                             cbSpeedRaw, cbSpeedAvg, cbAccRaw, cbAccAvg]() {
+        speedSeries->setVisible(cbSpeedRaw->isChecked());
+        speedMovingAvgSeries->setVisible(cbSpeedAvg->isChecked());
+        accSeries->setVisible(cbAccRaw->isChecked());
+        accMovingAvgSeries->setVisible(cbAccAvg->isChecked());
     };
 
-    // Подключаем сигналы к слоту
-    QObject::connect(cbRaw, &QCheckBox::toggled, dialog, updateVisibility);
-    QObject::connect(cbAvg, &QCheckBox::toggled, dialog, updateVisibility);
+    QObject::connect(cbSpeedRaw, &QCheckBox::toggled, dialog, updateVisibility);
+    QObject::connect(cbSpeedAvg, &QCheckBox::toggled, dialog, updateVisibility);
+    QObject::connect(cbAccRaw, &QCheckBox::toggled, dialog, updateVisibility);
+    QObject::connect(cbAccAvg, &QCheckBox::toggled, dialog, updateVisibility);
 
-    // Вызвать однократно для установки начального состояния
     updateVisibility();
 
     dialog->move(
@@ -893,4 +999,69 @@ void Window::random() {
         double randAccuracy = QRandomGenerator::global()->bounded(100.0);
         database_.saveTypingSession(currentUsername_,randNumber,randAccuracy);
     }
+}
+
+void Window::ShowKeyboardLayoutDialog() {
+    // Путь до папки с раскладками
+    QString layoutsPath = "/Users/hronov/Documents/Keyboard Trainer/keyboard_layouts";
+    QDir dir(layoutsPath);
+    QStringList filters {"*.json"};
+    QFileInfoList fileList = dir.entryInfoList(filters, QDir::Files | QDir::NoSymLinks);
+
+    if (fileList.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Папка с раскладками пуста или не найдены JSON файлы");
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Выберите раскладку клавиатуры");
+    dialog.setModal(true);
+    dialog.setFixedSize(350, 450);
+
+    QVBoxLayout layout(&dialog);
+
+    QLineEdit *searchEdit = new QLineEdit(&dialog);
+    searchEdit->setPlaceholderText("Поиск...");
+    layout.addWidget(searchEdit);
+
+    QListWidget *listWidget = new QListWidget(&dialog);
+
+    for (const QFileInfo &fileInfo : fileList) {
+        QString name = fileInfo.completeBaseName();
+        name.replace('_', ' ');
+        listWidget->addItem(name);
+    }
+    layout.addWidget(listWidget);
+
+    connect(searchEdit, &QLineEdit::textChanged, this, [listWidget](const QString &text){
+        QString filter = text.trimmed();
+        for (int i = 0; i < listWidget->count(); ++i) {
+            QListWidgetItem *item = listWidget->item(i);
+            bool match = item->text().contains(filter, Qt::CaseInsensitive);
+            item->setHidden(!match);
+        }
+    });
+
+    connect(listWidget, &QListWidget::itemClicked, &dialog, [&](QListWidgetItem* item){
+        QString fileName = item->text();
+        fileName.replace(' ', '_');
+        QString fileNameToSave = fileName;
+        fileName += ".json";
+        dialog.accept();
+
+        QString fullPath = layoutsPath + '/' + fileName;
+
+        if (!keyboardWidget_->loadLayoutFromJson(fullPath)) {
+            QMessageBox::warning(this, "Ошибка", "Не удалось загрузить раскладку из файла");
+        } else {
+            database_.updateUserSetting(currentUsername_,"keyboard_layout",fileNameToSave);
+        }
+    });
+
+    QRect screen_geometry = this->screen()->geometry();
+    dialog.move(
+        (screen_geometry.width() - dialog.width()) / 2,
+        (screen_geometry.height() - dialog.height()) / 2);
+
+    dialog.exec();
 }

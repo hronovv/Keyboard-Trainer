@@ -39,7 +39,8 @@ bool Database::initDatabase() {
                "font_weight INTEGER DEFAULT 500, "
                "line_height INTEGER DEFAULT 20,"
                "caret_smooth TEXT DEFAULT off,"
-               "caret_style TEXT DEFAULT ▮"
+               "caret_style TEXT DEFAULT '▮',"
+               "keyboard_layout TEXT DEFAULT 'qwerty'"
                ")");
     if (!ok) {
         qDebug() << "Error creating table:" << query.lastError().text();
@@ -104,7 +105,7 @@ bool Database::userExists(const QString &username) {
 
 bool Database::updateUserSetting(const QString &username, const QString &settingName, const QVariant &value) {
     static const QSet<QString> allowedColumns = {"font", "font_color", "font_size", "letter_spacing",
-        "word_spacing", "font_weight", "line_height","caret_smooth", "caret_style"};
+        "word_spacing", "font_weight", "line_height","caret_smooth", "caret_style","keyboard_layout"};
     if (!allowedColumns.contains(settingName)) {
         qDebug() << "Invalid setting name:" << settingName;
         return false;
@@ -132,7 +133,8 @@ UserSettings Database::getUserSettings(const QString &username) {
     UserSettings settings;
     QSqlQuery query(db);
     query.prepare("SELECT font, font_color, font_size, letter_spacing, word_spacing, font_weight, "
-                  "line_height, caret_smooth, caret_style FROM users WHERE username = :username LIMIT 1");
+                  "line_height, caret_smooth, caret_style, keyboard_layout FROM users WHERE username = "
+                  ":username LIMIT 1");
     query.bindValue(":username", username);
 
     if (query.exec() && query.next()) {
@@ -145,6 +147,7 @@ UserSettings Database::getUserSettings(const QString &username) {
         settings.line_height = query.value(6).toInt();
         settings.caret_smooth = query.value(7).toString();
         settings.caret_style = query.value(8).toString();
+        settings.keyboard_layout = query.value(9).toString();
     } else {
         qDebug() << "Failed to get user settings:" << query.lastError().text();
     }
@@ -176,12 +179,12 @@ bool Database::saveTypingSession(const QString &username, double wpm, double acc
     return true;
 }
 
-QVector<QPair<QDateTime, double>> Database::getTypingSessionsForUser(const QString &username) {
-    QVector<QPair<QDateTime, double>> result;
+QVector<QPair<QDateTime, QPair<double, double>>> Database::getTypingSessionsForUser(const QString &username) {
+    QVector<QPair<QDateTime, QPair<double, double>>> result;
 
     QSqlQuery query(db);
     query.prepare(R"(
-        SELECT ts.session_date, ts.wpm
+        SELECT ts.session_date, ts.wpm, ts.accuracy
         FROM typing_sessions ts
         JOIN users u ON ts.user_id = u.id
         WHERE u.username = :username
@@ -193,7 +196,8 @@ QVector<QPair<QDateTime, double>> Database::getTypingSessionsForUser(const QStri
         while (query.next()) {
             QDateTime date = query.value(0).toDateTime();
             double wpm = query.value(1).toDouble();
-            result.append(qMakePair(date, wpm));
+            double accuracy = query.value(2).toDouble();
+            result.append(qMakePair(date, qMakePair(wpm, accuracy)));
         }
     } else {
         qDebug() << "Failed to get typing sessions:" << query.lastError().text();

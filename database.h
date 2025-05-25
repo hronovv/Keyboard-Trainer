@@ -16,6 +16,7 @@ struct UserSettings {
     int line_height;
     QString caret_smooth;
     QString caret_style;
+    QString keyboard_layout;
 };
 
 class Database : public QObject
@@ -32,7 +33,7 @@ public:
     bool updateUserSetting(const QString &username, const QString &settingName, const QVariant &value);
     UserSettings getUserSettings(const QString &username);
     bool saveTypingSession(const QString &username, double wpm, double accuracy);
-    QVector<QPair<QDateTime, double>> getTypingSessionsForUser(const QString &username);
+    QVector<QPair<QDateTime, QPair<double, double>>> getTypingSessionsForUser(const QString &username);
 
 
 private:

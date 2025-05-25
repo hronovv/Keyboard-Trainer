@@ -40,6 +40,7 @@
 #include "database.h"
 #include "logindialog.h"
 #include "settingswidget.h"
+#include "keyboardwidget.h"
 
 // Constants
 constexpr int kWindowSize = 1600;
@@ -54,8 +55,7 @@ constexpr int kDefaultLineHeight = 20;
 constexpr int kIntervalMs = 200;
 
 constexpr int kTextFieldWidth = 1200;
-constexpr int kTextFieldMinimumHeigth = 500;
-constexpr int kTextFieldMinimumHeight = 100;
+constexpr int kTextFieldMinimumHeigth = 300;
 
 constexpr int kSpinBoxWidth = 72;
 
@@ -130,6 +130,7 @@ private slots:
     void ShowWordSetDialog();
     void ShowStats();
     void random();
+    void ShowKeyboardLayoutDialog();
 
 private:
     // Typing related methods
@@ -147,6 +148,7 @@ private:
     SettingsWidget *settingsWidget_;
     QSvgWidget* accountIconLabel;
     QSvgWidget* settingsIconLabel;
+    KeyboardWidget *keyboardWidget_;
 
     QGraphicsOpacityEffect* effect_;
     QPropertyAnimation* animation_;

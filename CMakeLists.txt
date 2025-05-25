@@ -32,6 +32,8 @@ add_executable(Keyboard_Trainer main.cpp
         createaccountdialog.h
         settingswidget.cpp
         settingswidget.h
+        keyboardwidget.cpp
+        keyboardwidget.h
 )
 
 target_link_libraries(Keyboard_Trainer

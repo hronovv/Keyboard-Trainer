@@ -415,17 +415,17 @@ void Window::keyPressEvent(QKeyEvent* event) {
             typedCharCount_++;
         } else {
             if (i == currentIndex_) {
-                if (caretStyle_.isEmpty()) {
+                if (caretStyle_ == "off") {
                     colored_text += "<span style='color:" + textColor_.name() + ";'>" + QString(targetText_.at(i)) +
                         "</span>";
                 } else if (caretStyle_ == "_") {
                          colored_text += "<span style='text-decoration: underline; color: white;'>" +
                             QString(targetText_.at(i)) +
                         "</span>";
-                    } else if (caretStyle_ == "▮") {
-                        colored_text += "<span style='background-color: rgba(0,0,0,0.4); color:" +
-                textColor_.name() + "'>" + QString(targetText_.at(i)) + "</span>";
-                    }
+                } else if (caretStyle_ == "▮") {
+                    colored_text += "<span style='background-color: rgba(0,0,0,0.4); color:" +
+            textColor_.name() + "'>" + QString(targetText_.at(i)) + "</span>";
+                }
             } else {
                 colored_text += "<span style='color:" + textColor_.name() + ";'>" + QString(targetText_.at(i))
                  + "</span>";

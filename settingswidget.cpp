@@ -218,7 +218,7 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     QWidget* caretStyleWidget = nullptr;
     caretStyleButtons_.clear();
     createOptionButtons("Caret style", "Change the style of the caret during the test.",
-        {"off", "▮", "▯", "_"}, caretStyleWidget, caretStyleButtons_,
+        {"off", "▮", "_"}, caretStyleWidget, caretStyleButtons_,
         "background-color: #ebcb8b; color: #2e3440; font-weight: 700;");
 
     // Контейнер для сворачиваемых настроек caret

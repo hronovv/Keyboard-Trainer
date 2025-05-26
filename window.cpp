@@ -419,9 +419,9 @@ void Window::keyPressEvent(QKeyEvent* event) {
                     colored_text += "<span style='color:" + textColor_.name() + ";'>" + QString(targetText_.at(i)) +
                         "</span>";
                 } else if (caretStyle_ == "_") {
-                         colored_text += "<span style='text-decoration: underline; color: white;'>" +
-                            QString(targetText_.at(i)) +
-                        "</span>";
+                    colored_text += "<span style='text-decoration: underline; color: " + textColor_.name() + ";'>" +
+                                    QString(targetText_.at(i)) +
+                                    "</span>";
                 } else if (caretStyle_ == "▮") {
                     colored_text += "<span style='background-color: rgba(0,0,0,0.4); color:" +
             textColor_.name() + "'>" + QString(targetText_.at(i)) + "</span>";

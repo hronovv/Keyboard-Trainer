@@ -21,9 +21,9 @@ bool KeyboardWidget::loadLayoutFromJson(const QString &jsonFilePath) {
     QByteArray data = file.readAll();
     file.close();
 
-    // Получаем имя раскладки без пути и расширения
+
     QFileInfo fileInfo(jsonFilePath);
-    keyboardLayoutName_ = fileInfo.completeBaseName();  // например "russian"
+    keyboardLayoutName_ = fileInfo.completeBaseName();
 
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
@@ -65,10 +65,7 @@ bool KeyboardWidget::loadLayoutFromJson(const QString &jsonFilePath) {
 
         if (rowName == "row5") {
             int colNum = rowIndents[rowNum];
-
-            // Используем название раскладки вместо пробела
             createKeyButton(keyboardLayoutName_, rowNum, colNum, 7);
-
             rowNum++;
             continue;
         }
@@ -100,10 +97,8 @@ void KeyboardWidget::createKeyButton(const QString &keyLabel, int row, int col, 
     QString displayLabel;
 
     if (keyLabel.toLower() == "space") {
-        // Если встречается ключ "space", ставим пустой пробел (для совместимости)
         displayLabel = " ";
     } else if (keyLabel == keyboardLayoutName_) {
-        // Если метка совпадает с названием раскладки (на пробеле), показываем это название
         displayLabel = keyLabel;
     } else if (!keyLabel.isEmpty()) {
         QChar lowerChar = keyLabel.at(0).toLower();
@@ -123,7 +118,8 @@ void KeyboardWidget::createKeyButton(const QString &keyLabel, int row, int col, 
     int btnWidth = btnWidthPerCol * colspan + spacing * (colspan - 1);
     btn->setFixedWidth(btnWidth);
 
-    btn->setStyleSheet("background-color: #3b4252; color: #d8dee9; border-radius: 6px; font-weight: bold; font-size: 12px;");
+    btn->setStyleSheet("background-color: #3b4252; color: #d8dee9; border-radius: 6px; "
+                       "font-weight: bold; font-size: 12px;");
 
     QFont font = btn->font();
     font.setPointSize(12);

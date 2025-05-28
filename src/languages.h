@@ -1,6 +1,9 @@
 #ifndef QT_API_LANGUAGES_H
 #define QT_API_LANGUAGES_H
+
+
 #include "vector"
+
 const std::vector<std::string> kLanguages = {"Аймара",
                                              "Азербайджанский",
                                              "Албанский",

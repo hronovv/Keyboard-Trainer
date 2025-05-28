@@ -3,7 +3,7 @@
 Window::Window(Database &db, QWidget *parent)
     : QWidget(parent), database_(db) {
 
-    // --- Настройка виджета настроек ---
+
     settingsWidget_ = new SettingsWidget(database_, currentUsername_, this);
     settingsWidget_->hide();
 
@@ -24,13 +24,13 @@ Window::Window(Database &db, QWidget *parent)
         ApplyTextStyles();
     });
 
-    // --- Таймер для подсчета WPM ---
+
     typing_timer_ = new QTimer(this);
     typing_timer_->setInterval(kIntervalMs);
     connect(typing_timer_, &QTimer::timeout, this, &Window::UpdateWPM);
     elapsed_seconds_ = 0;
 
-    // --- Настройка меток ---
+
     generated_text_ = new QLabel(this);
     generated_text_->setObjectName("generatedText");
     generated_text_->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
@@ -51,7 +51,7 @@ Window::Window(Database &db, QWidget *parent)
         qWarning() << "Failed to load keyboard layout from json";
     }
 
-    // --- Кнопки настроек и входа ---
+
     auto settings_button = new QPushButton(this);
     settings_button->setStyleSheet("border: none; background: transparent;");
     settings_button->setIcon(QIcon("/Users/hronov/Documents/Keyboard Trainer/icons/settings.svg"));
@@ -68,7 +68,7 @@ Window::Window(Database &db, QWidget *parent)
     login_button->setCursor(Qt::PointingHandCursor);
     connect(login_button, &QPushButton::clicked, this, &Window::showLoginDialog);
 
-    // --- Нижняя панель с кнопками и именем пользователя ---
+
     auto bottomLayout = new QHBoxLayout();
     bottomLayout->addWidget(settings_button);
     bottomLayout->addSpacing(100);
@@ -79,7 +79,7 @@ Window::Window(Database &db, QWidget *parent)
     bottomLayout->addWidget(usernameLabel_);
     bottomLayout->setAlignment(Qt::AlignCenter);
 
-    // --- Категории / Меню ---
+
     QWidget *categoryWidget = new QWidget(this);
     categoryWidget->setObjectName("categoryWidget");
     QHBoxLayout *categoryLayout = new QHBoxLayout(categoryWidget);
@@ -104,14 +104,36 @@ Window::Window(Database &db, QWidget *parent)
             QPushButton *button = new QPushButton(text, categoryWidget);
             button->setFlat(true);
             button->setCursor(Qt::PointingHandCursor);
+            if (text == "numbers") {
+                button->setCheckable(true);
+                connect(button, &QPushButton::toggled, this, [this](bool checked){
+                    numbersModeActive_ = checked;
+                    GenerateNewTextFromWordList();
+                });
+            } else if (text == "punctuation") {
+                button->setCheckable(true);
+                connect(button, &QPushButton::toggled, this, [this](bool checked){
+                    punctuationModeActive_ = checked;
+                    GenerateNewTextFromWordList();
+                });
+            }
             button->setStyleSheet(R"(
+            QPushButton {
                 color: #eee;
                 font-size: 14px;
                 padding: 5px 12px;
                 background-color: rgba(245, 245, 245, 0.15);
                 border-radius: 8px;
                 font-weight: 600;
-            )");
+                border: none;
+                text-align: center;
+            }
+            QPushButton:checked {
+                background-color: #88c0d0;
+                color: #2e3440;
+                font-weight: 800;
+            }
+        )");
             categoryLayout->addWidget(button);
 
             QMap<QString, std::function<void()>> actions = {
@@ -121,6 +143,7 @@ Window::Window(Database &db, QWidget *parent)
                 { "stop", [this]() { DisableTyping(); } },
                 { "stats", [this]() { ShowStats(); } },
                 { "quote", [this]() { random(); } },
+                { "amount", [this]() { ShowAmountSelectorDialog(); }},
             };
 
             connect(button, &QPushButton::clicked, this, [this, text, actions]() {
@@ -132,16 +155,15 @@ Window::Window(Database &db, QWidget *parent)
         }
     };
 
-    // Добавляем кнопки и метки категорий
+
     addCategoryWidget("ai", true);
     addCategoryWidget("language", true);
-    addCategoryWidget("punctuation");
-    addCategoryWidget("numbers");
+    addCategoryWidget("punctuation",true);
+    addCategoryWidget("numbers",true);
     addCategoryWidget("time");
     addCategoryWidget("words", true);
     addCategoryWidget("quote",true);
-    addCategoryWidget("custom", true);
-    addCategoryWidget("stop", true);
+    addCategoryWidget("amount", true);
     addCategoryWidget("stats", true);
 
     categoryWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
@@ -151,14 +173,14 @@ Window::Window(Database &db, QWidget *parent)
     categoryWrapperLayout->addWidget(categoryWidget);
     categoryWrapperLayout->addStretch();
 
-    // --- Основной лейаут ---
+
     auto main_layout = new QVBoxLayout(this);
     main_layout->addLayout(bottomLayout);
     main_layout->addLayout(categoryWrapperLayout);
     main_layout->addSpacing(50);
     main_layout->addWidget(generated_text_, 0, Qt::AlignHCenter);
     main_layout->addWidget(keyboardWidget_, 0, Qt::AlignHCenter);
-    main_layout->addSpacing(20);  // небольшой отступ между клавиатурой и скоростью
+    main_layout->addSpacing(20);
     main_layout->addWidget(statusLabel_, 0, Qt::AlignHCenter);
     main_layout->addStretch();
     main_layout->setContentsMargins(10, 10, 10, 20);
@@ -167,7 +189,7 @@ Window::Window(Database &db, QWidget *parent)
 
     setLayout(main_layout);
 
-    // --- Глобальный стиль ---
+
     QString globalStyle = R"(
         QWidget {
             background-color: #3b4252;
@@ -223,7 +245,7 @@ Window::Window(Database &db, QWidget *parent)
     setStyleSheet(globalStyle);
 }
 
-// === Методы ---
+
 
 void Window::SetLanguage(const QString& language) {
     prompt_language_ = language;
@@ -258,6 +280,7 @@ void Window::Prompt() {
         animation_->setEndValue(1.0);
         animation_->start(QAbstractAnimation::DeleteWhenStopped);
 
+        wordsModeActive_ = false;
         typing_allowed_ = true;
 
     } catch (const nlohmann::json::type_error&) {
@@ -285,7 +308,6 @@ void Window::ShowLanguageDialog() {
 
     layout.addWidget(&list_widget);
 
-    // Центрируем диалог по экрану
     QRect screen_geometry = this->screen()->geometry();
     dialog.move(
         (screen_geometry.width() - dialog.width()) / 2,
@@ -351,7 +373,7 @@ void Window::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
-    if (event->key() == Qt::Key_Tab && wordsModeActive_) {
+    if (event->key() == Qt::Key_Tab && (wordsModeActive_ || numbersModeActive_)) {
         event->accept();
         keyboardWidget_->clearHighlight();
         GenerateNewTextFromWordList();
@@ -524,6 +546,7 @@ void Window::LoadUserSettings() {
     lineHeight_ = settings.line_height;
     caretSmooth_ = caretMap.value(settings.caret_smooth);
     caretStyle_ = settings.caret_style;
+    currentWordAmount_= settings.words_amount;
     keyboardWidget_->loadLayoutFromJson("/Users/hronov/Documents/Keyboard Trainer/keyboard_layouts/" +
         settings.keyboard_layout + ".json");
 
@@ -541,7 +564,6 @@ void Window::ShowSettings() {
 
     settingsWidget_->loadSettings();
 
-    // Получение геометрии экрана для позиционирования
     QRect screenGeometry;
     if (settingsWidget_->parentWidget()) {
         screenGeometry = settingsWidget_->parentWidget()->screen()->geometry();
@@ -552,7 +574,6 @@ void Window::ShowSettings() {
     settingsWidget_->setGeometry(screenGeometry);
     settingsWidget_->show();
 
-    // Анимация появления
     QPropertyAnimation *anim = new QPropertyAnimation(settingsWidget_, "windowOpacity");
     settingsWidget_->setWindowOpacity(0);
     anim->setDuration(300);
@@ -562,19 +583,16 @@ void Window::ShowSettings() {
 }
 
 void Window::ShowWordSetDialog() {
-    // Создаем overlay — затемняющий полупрозрачный виджет поверх главного
     QWidget *overlay = new QWidget(this);
     overlay->setObjectName("overlayWidget");
     overlay->setGeometry(this->rect());
     overlay->setStyleSheet("background-color: rgba(0, 0, 0, 100);");
     overlay->show();
 
-    // Добавляем блюр к главному виджету
     QGraphicsBlurEffect *blur = new QGraphicsBlurEffect(overlay);
     blur->setBlurRadius(40);
     this->setGraphicsEffect(blur);
 
-    // Получаем список JSON файлов в папке языков
     QString languagesPath = "/Users/hronov/Documents/Keyboard Trainer/languages";
     QDir dir(languagesPath);
     QStringList filters {"*.json"};
@@ -587,7 +605,6 @@ void Window::ShowWordSetDialog() {
         return;
     }
 
-    // Создаем диалог выбора набора слов
     QDialog dialog(this);
     dialog.setWindowTitle("Выберите набор слов");
     dialog.setModal(true);
@@ -648,12 +665,10 @@ void Window::ShowWordSetDialog() {
 
     QVBoxLayout layout(&dialog);
 
-    // Поисковое поле
     QLineEdit *searchEdit = new QLineEdit(&dialog);
     searchEdit->setPlaceholderText("Поиск...");
     layout.addWidget(searchEdit);
 
-    // Список наборов слов
     QListWidget *listWidget = new QListWidget(&dialog);
     for (const QFileInfo &fileInfo : fileList) {
         QString name = fileInfo.completeBaseName();
@@ -662,7 +677,6 @@ void Window::ShowWordSetDialog() {
     }
     layout.addWidget(listWidget);
 
-    // Фильтрация списка по поиску
     connect(searchEdit, &QLineEdit::textChanged, this, [listWidget](const QString &text){
         QString filter = text.trimmed();
         for (int i = 0; i < listWidget->count(); ++i) {
@@ -672,7 +686,6 @@ void Window::ShowWordSetDialog() {
         }
     });
 
-    // Обработка выбора набора слов
     connect(listWidget, &QListWidget::itemClicked, &dialog, [&](QListWidgetItem *item) {
         QString fileName = item->text();
         fileName.replace(' ', '_') += ".json";
@@ -697,7 +710,6 @@ void Window::ShowWordSetDialog() {
 
         QStringList wordsList;
 
-        // Парсим слова из JSON
         if (doc.isArray()) {
             for (const QJsonValue &val : doc.array()) {
                 if (val.isString())
@@ -726,10 +738,8 @@ void Window::ShowWordSetDialog() {
         currentWordList_ = wordsList;
         wordsModeActive_ = true;
         GenerateNewTextFromWordList();
-        typing_allowed_ = true;
     });
 
-    // Центрируем диалог
     QRect screen_geometry = this->screen()->geometry();
     dialog.move(
         (screen_geometry.width() - dialog.width()) / 2,
@@ -737,32 +747,104 @@ void Window::ShowWordSetDialog() {
 
     dialog.exec();
 
-    // Убираем блюр и оверлей по закрытию диалога
     setGraphicsEffect(nullptr);
     overlay->deleteLater();
 }
 
 void Window::GenerateNewTextFromWordList() {
-    if (currentWordList_.isEmpty()) {
+    typing_allowed_ = true;
+    QStringList newSelection;
+    int count = currentWordAmount_;
+
+    if (currentWordList_.isEmpty() && !numbersModeActive_) {
+        generated_text_->clear();
         return;
     }
 
-    QStringList newSelection;
     QSet<int> usedIndices;
-    int count = std::min(15, int(currentWordList_.size()));
+    const double numberChance = numbersModeActive_ ? 0.15 : 0.0;
+    const double punctuationChance = punctuationModeActive_ ? 0.20 : 0.0;
 
-    while (newSelection.size() < count) {
-        int index = QRandomGenerator::global()->bounded(currentWordList_.size());
-        if (!usedIndices.contains(index)) {
+    QVector<QChar> punctuationChars = {'!', ',', ';', ':', '?', '.', '-'};
+
+    bool lastWasPunctuation = false;
+    bool capitalizeNextWord = true;
+
+    int i = 0;
+    while (i < count) {
+        QString nextWord;
+        bool insertNumber = (QRandomGenerator::global()->generateDouble() < numberChance);
+
+        if (insertNumber) {
+            nextWord = QString::number(QRandomGenerator::global()->bounded(1, 1000));
+        } else if (currentWordList_.isEmpty()) {
+            nextWord = QString::number(QRandomGenerator::global()->bounded(1, 1000));
+        } else {
+            int index;
+            do {
+                index = QRandomGenerator::global()->bounded(currentWordList_.size());
+            } while (usedIndices.contains(index) && usedIndices.size() < currentWordList_.size());
             usedIndices.insert(index);
-            newSelection.append(currentWordList_.at(index));
+            nextWord = currentWordList_.at(index);
+        }
+
+        // Управление заглавной буквой первого слова и последующих после знаков
+        if (capitalizeNextWord && !nextWord.isEmpty() && !nextWord[0].isDigit()) {
+            if (punctuationModeActive_ || i > 0) {
+                nextWord[0] = nextWord[0].toUpper();
+                capitalizeNextWord = false;
+            } else {
+                nextWord[0] = nextWord[0].toLower();
+                capitalizeNextWord = false;
+            }
+        } else if (!nextWord.isEmpty()) {
+            nextWord[0] = nextWord[0].toLower();
+        }
+
+        newSelection.append(nextWord);
+        lastWasPunctuation = false;
+        ++i;
+
+        if (punctuationChance == 0.0)
+            continue;
+
+        if (i < count && !lastWasPunctuation && (QRandomGenerator::global()->generateDouble() < punctuationChance)) {
+            QChar punc;
+            do {
+                punc = punctuationChars.at(QRandomGenerator::global()->bounded(punctuationChars.size()));
+            } while (lastWasPunctuation);
+
+            newSelection.append(QString(punc));
+            lastWasPunctuation = true;
+
+            if (punc == '.' || punc == '!' || punc == '?') {
+                capitalizeNextWord = true;
+            }
         }
     }
 
-    generated_text_->setText(newSelection.join(' '));
+    QString result;
+    for (int idx = 0; idx < newSelection.size(); ++idx) {
+        const QString &token = newSelection.at(idx);
+        if (token.length() == 1 && punctuationChars.contains(token[0])) {
+            if (token[0] == '-') {
+                result += " - ";
+            } else {
+                result += token;
+            }
+        } else {
+            if (!result.isEmpty() && !result.endsWith(' ')) {
+                result += ' ';
+            }
+            result += token;
+        }
+    }
+
+    result = result.trimmed().replace("  -  ", " - ");
+
+    generated_text_->setText(result);
     ResetText();
 }
-
 void Window::ShowStats() {
     if (currentUsername_.isEmpty()) {
         QMessageBox::information(this, "Инфо", "Сначала войдите в систему");
@@ -801,13 +883,12 @@ void Window::ShowStats() {
     contentLayout->setContentsMargins(20, 20, 20, 20);
     contentLayout->setSpacing(20);
 
-    // --- График скорости ---
     QLineSeries *speedSeries = new QLineSeries();
     QLineSeries *speedMovingAvgSeries = new QLineSeries();
     for (int i = 0; i < sessions.size(); ++i) {
         speedSeries->append(i + 1, sessions[i].second.first);
     }
-    int windowSize = 10; // скользящее среднее
+    int windowSize = 10;
     for (int i = 0; i < sessions.size(); ++i) {
         int startIdx = qMax(0, i - windowSize + 1);
         int count = i - startIdx + 1;
@@ -874,7 +955,6 @@ void Window::ShowStats() {
     speedChartView->setStyleSheet("background-color: transparent;");
     speedChartView->setMinimumHeight(350);
 
-    // --- График точности ---
     QLineSeries *accSeries = new QLineSeries();
     QLineSeries *accMovingAvgSeries = new QLineSeries();
     for (int i = 0; i < sessions.size(); ++i) {
@@ -935,7 +1015,6 @@ void Window::ShowStats() {
     accChartView->setStyleSheet("background-color: transparent;");
     accChartView->setMinimumHeight(350);
 
-    // --- Чекбоксы для управления видимостью ---
     QCheckBox *cbSpeedRaw = new QCheckBox("Показать скорость (сырые данные)", dialog);
     cbSpeedRaw->setChecked(true);
     QCheckBox *cbSpeedAvg = new QCheckBox("Показать скорость (скользящее среднее)", dialog);
@@ -1002,7 +1081,6 @@ void Window::random() {
 }
 
 void Window::ShowKeyboardLayoutDialog() {
-    // Путь до папки с раскладками
     QString layoutsPath = "/Users/hronov/Documents/Keyboard Trainer/keyboard_layouts";
     QDir dir(layoutsPath);
     QStringList filters {"*.json"};
@@ -1054,7 +1132,9 @@ void Window::ShowKeyboardLayoutDialog() {
         if (!keyboardWidget_->loadLayoutFromJson(fullPath)) {
             QMessageBox::warning(this, "Ошибка", "Не удалось загрузить раскладку из файла");
         } else {
-            database_.updateUserSetting(currentUsername_,"keyboard_layout",fileNameToSave);
+            if (!currentUsername_.isEmpty()) {
+                database_.updateUserSetting(currentUsername_,"keyboard_layout",fileNameToSave);
+            }
         }
     });
 
@@ -1064,4 +1144,185 @@ void Window::ShowKeyboardLayoutDialog() {
         (screen_geometry.height() - dialog.height()) / 2);
 
     dialog.exec();
+}
+
+void Window::ShowAmountSelectorDialog() {
+    QWidget *overlay = new QWidget(this);
+    overlay->setObjectName("overlayWidget");
+    overlay->setGeometry(this->rect());
+    overlay->setStyleSheet("background-color: rgba(0, 0, 0, 120);");
+    overlay->show();
+
+    QGraphicsBlurEffect *blur = new QGraphicsBlurEffect(overlay);
+    blur->setBlurRadius(40);
+    this->setGraphicsEffect(blur);
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Выберите количество слов");
+    dialog.setModal(true);
+    dialog.resize(470, 400);
+
+    QWidget *formContainer = new QWidget(&dialog);
+    formContainer->setObjectName("formContainer");
+    formContainer->setFixedSize(430, 360);
+
+    QVBoxLayout *formLayout = new QVBoxLayout(formContainer);
+    formLayout->setContentsMargins(30, 25, 30, 25);
+    formLayout->setSpacing(20);
+
+    QLabel *titleLabel = new QLabel("Введите количество слов", formContainer);
+    QFont titleFont = titleLabel->font();
+    titleFont.setPointSize(20);
+    titleFont.setBold(true);
+    titleLabel->setFont(titleFont);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet("color: #d8dee9;");
+
+    QLineEdit *inputLine = new QLineEdit(formContainer);
+    inputLine->setValidator(new QIntValidator(1, 9999, &dialog));
+    inputLine->setText(QString::number(currentWordAmount_));
+    inputLine->setPlaceholderText("Число от 1 до 9999");
+    inputLine->setObjectName("inputField");
+    inputLine->setFixedHeight(50);
+
+    QHBoxLayout *quickButtonsLayout = new QHBoxLayout();
+    quickButtonsLayout->setSpacing(12);
+
+    auto createQuickBtn = [&](const QString &text) {
+        QPushButton *btn = new QPushButton(text, formContainer);
+        btn->setObjectName("secondaryButton");
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setFixedSize(70, 34);
+        connect(btn, &QPushButton::clicked, this, [inputLine, text]() {
+            inputLine->setText(text);
+        });
+        return btn;
+    };
+
+    quickButtonsLayout->addStretch();
+    quickButtonsLayout->addWidget(createQuickBtn("10"));
+    quickButtonsLayout->addWidget(createQuickBtn("25"));
+    quickButtonsLayout->addWidget(createQuickBtn("50"));
+    quickButtonsLayout->addWidget(createQuickBtn("100"));
+    quickButtonsLayout->addStretch();
+
+    QHBoxLayout *actionsLayout = new QHBoxLayout();
+    actionsLayout->setSpacing(20);
+
+    QPushButton *okButton = new QPushButton("OK", formContainer);
+    okButton->setObjectName("primaryButton");
+    okButton->setDefault(true);
+    okButton->setCursor(Qt::PointingHandCursor);
+    okButton->setFixedSize(100, 40);
+
+    QPushButton *cancelButton = new QPushButton("Отмена", formContainer);
+    cancelButton->setObjectName("secondaryButton");
+    cancelButton->setCursor(Qt::PointingHandCursor);
+    cancelButton->setFixedSize(100, 40);
+
+    actionsLayout->addStretch();
+    actionsLayout->addWidget(okButton);
+    actionsLayout->addWidget(cancelButton);
+    actionsLayout->addStretch();
+
+    formLayout->addWidget(titleLabel);
+    formLayout->addWidget(inputLine);
+    formLayout->addLayout(quickButtonsLayout);
+    formLayout->addLayout(actionsLayout);
+
+    QVBoxLayout *dialogLayout = new QVBoxLayout(&dialog);
+    dialogLayout->addStretch();
+    dialogLayout->addWidget(formContainer, 0, Qt::AlignHCenter);
+    dialogLayout->addStretch();
+    dialogLayout->setContentsMargins(0, 0, 0, 0);
+
+    dialog.setStyleSheet(R"(
+        QDialog {
+            background-color: #2e3440;
+            color: #d8dee9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana;
+            font-weight: normal;
+        }
+        #formContainer {
+            background-color: #3b4252;
+            border-radius: 12px;
+        }
+        #inputField {
+            background-color: #3b4252;
+            border: 1.5px solid #4c566a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: #eceff4;
+            font-size: 16px;
+            font-weight: normal;
+            margin-bottom: 10px;
+        }
+        #inputField:focus {
+            border: 1.5px solid #88c0d0;
+            background-color: #434c5e;
+            outline: none;
+        }
+        QPushButton#primaryButton {
+            background-color: #667eea;
+            color: white;
+            border-radius: 14px;
+            font-weight: normal;
+            font-size: 16px;
+            border: none;
+        }
+        QPushButton#primaryButton:hover {
+            background-color: #556cd6;
+        }
+        QPushButton#primaryButton:pressed {
+            background-color: #4455b2;
+        }
+        QPushButton#secondaryButton {
+            background-color: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+            border-radius: 14px;
+            font-weight: normal;
+            font-size: 14px;
+        }
+        QPushButton#secondaryButton:hover {
+            background-color: #667eea;
+            color: white;
+        }
+        QPushButton#secondaryButton:pressed {
+            background-color: #556cd6;
+            border-color: #4455b2;
+        }
+    )");
+
+    QRect screen_geometry = this->screen()->geometry();
+    dialog.move(
+        (screen_geometry.width() - dialog.width()) / 2,
+        (screen_geometry.height() - dialog.height()) / 2);
+
+    connect(okButton, &QPushButton::clicked, &dialog, [&dialog, inputLine]() {
+        bool ok = false;
+        int val = inputLine->text().toInt(&ok);
+        if (!ok || val <= 0) {
+            inputLine->setFocus();
+            return;
+        }
+        dialog.accept();
+    });
+
+    connect(cancelButton, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        bool ok = false;
+        int val = inputLine->text().toInt(&ok);
+        if (ok && val > 0) {
+            currentWordAmount_ = val;
+            if (!currentUsername_.isEmpty()) {
+                database_.updateUserSetting(currentUsername_, "words_amount", QVariant(val));
+            }
+            GenerateNewTextFromWordList();
+        }
+    }
+
+    setGraphicsEffect(nullptr);
+    overlay->deleteLater();
 }

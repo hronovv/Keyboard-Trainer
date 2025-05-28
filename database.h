@@ -17,6 +17,7 @@ struct UserSettings {
     QString caret_smooth;
     QString caret_style;
     QString keyboard_layout;
+    int words_amount;
 };
 
 class Database : public QObject

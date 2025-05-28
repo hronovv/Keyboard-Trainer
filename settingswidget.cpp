@@ -101,14 +101,14 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     mainLayout->setContentsMargins(0,0,0,0);
     mainLayout->setSpacing(0);
 
-    // --- Контент с настройками (прокручиваемый) ---
+
     QWidget *contentWidget = new QWidget;
     contentWidget->setStyleSheet("background-color: transparent;");
     QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
     contentLayout->setContentsMargins(40, 30, 40, 30);
     contentLayout->setSpacing(20);
 
-    // --- Вспомогательная лямбда для создания групп кнопок ---
+
     auto createOptionButtons = [&](const QString& labelText, const QString& description, const QStringList& options,
         QWidget* &widgetHolder, QList<QPushButton*> &buttonGroup, const QString& checkedStyle) -> QVBoxLayout* {
         QVBoxLayout* vlay = new QVBoxLayout();
@@ -160,7 +160,7 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
         return vlay;
     };
 
-    // --- Настройки ---
+
     letterSpacingSpinBox_ = new QSpinBox(this);
     letterSpacingSpinBox_->setRange(0, 20);
     wordSpacingSpinBox_ = new QSpinBox(this);
@@ -208,7 +208,7 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     addLabeledWidget("Межстрочный интервал:", lineHeightSpinBox_);
     addLabeledWidget("Цвет текста:", colorButton_);
 
-    // --- Кнопки caret ---
+
     QWidget* caretSmoothWidget = nullptr;
     caretSmoothButtons_.clear();
     createOptionButtons("Caret", "The caret will move smoothly between letters and words.",
@@ -221,7 +221,7 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
         {"off", "▮", "_"}, caretStyleWidget, caretStyleButtons_,
         "background-color: #ebcb8b; color: #2e3440; font-weight: 700;");
 
-    // Контейнер для сворачиваемых настроек caret
+
     QWidget* caretSettingsContainer = new QWidget(this);
     QVBoxLayout* caretSettingsLayout = new QVBoxLayout(caretSettingsContainer);
     caretSettingsLayout->setContentsMargins(0, 0, 0, 0);
@@ -229,7 +229,7 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     caretSettingsLayout->addWidget(caretSmoothWidget);
     caretSettingsLayout->addWidget(caretStyleWidget);
 
-    // Кнопка сворачивания
+
     QToolButton* toggleCaretButton = new QToolButton(this);
     toggleCaretButton->setText("Caret settings");
     toggleCaretButton->setCheckable(true);
@@ -242,17 +242,16 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
         toggleCaretButton->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
     });
 
-    // Добавляем кнопку и контейнер caret настроек в contentLayout
     contentLayout->addWidget(toggleCaretButton);
     contentLayout->addWidget(caretSettingsContainer);
 
-    // Прокручиваемая область с настройками
+
     QScrollArea *scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
     scrollArea->setWidget(contentWidget);
     scrollArea->setFrameShape(QFrame::NoFrame);
 
-    // --- Кнопки сохранения и отмены (фиксированы внизу) ---
+
     QWidget *buttonsWidget = new QWidget(this);
     QHBoxLayout *buttonsLayout = new QHBoxLayout(buttonsWidget);
     buttonsLayout->setContentsMargins(40, 20, 40, 30);
@@ -267,11 +266,11 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     buttonsLayout->addStretch();
     buttonsLayout->addWidget(cancelButton_);
 
-    // Добавляем все в главный layout
-    mainLayout->addWidget(scrollArea, 1); // stretch для прокрутки
-    mainLayout->addWidget(buttonsWidget, 0); // кнопки фиксированной высоты снизу
 
-    // Подключение сигналов для кнопок
+    mainLayout->addWidget(scrollArea, 1);
+    mainLayout->addWidget(buttonsWidget, 0);
+
+
     connect(saveButton_, &QPushButton::clicked, this, [this]() {
         if (username_.isEmpty()) {
             QMessageBox::warning(this, "Ошибка", "Пользователь не выбран");
@@ -360,7 +359,7 @@ void SettingsWidget::cancel() {
     anim->setEndValue(0.0);
     connect(anim, &QPropertyAnimation::finished, this, [this]() {
         this->hide();
-        this->setWindowOpacity(1.0); // Чтобы при следующем показе непрозрачность была нормальной
+        this->setWindowOpacity(1.0);
     });
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 

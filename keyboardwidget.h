@@ -14,9 +14,9 @@ class KeyboardWidget : public QWidget {
 public:
     explicit KeyboardWidget(QWidget *parent = nullptr);
 
-    bool loadLayoutFromJson(const QString &jsonFilePath); // Загрузка из JSON
-    void highlightKey(QChar key);                           // Подсветить клавишу
-    void clearHighlight();                                  // Очистить подсветку
+    bool loadLayoutFromJson(const QString &jsonFilePath);
+    void highlightKey(QChar key);
+    void clearHighlight();
     void clearKeyboard();
     signals:
     void spaceKeyClicked();

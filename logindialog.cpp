@@ -17,7 +17,7 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
     setWindowTitle("Вход в систему");
     resize(425, 365);
 
-    // Основной контейнер с темным фоном
+
     QWidget *formContainer = new QWidget(this);
     formContainer->setObjectName("formContainer");
     formContainer->setFixedSize(400, 340);
@@ -50,7 +50,7 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
     passwordEdit->setEchoMode(QLineEdit::Password);
     passwordEdit->setObjectName("inputField");
 
-    // Иконка "глазик"
+
     QIcon eyeOpenedIcon(QStringLiteral("/Users/hronov/Documents/Keyboard Trainer/icons/opened-eye.svg"));
     QIcon eyeClosedIcon(QStringLiteral("/Users/hronov/Documents/Keyboard Trainer/icons/closed-eye.svg"));
 
@@ -87,7 +87,7 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent) :
     mainLayout->addStretch();
     mainLayout->setContentsMargins(0, 0, 0, 0);
 
-    // Применяем стиль в точности как ваш темный стиль
+
     setStyleSheet(R"(
         QDialog {
             background-color: #2e3440;

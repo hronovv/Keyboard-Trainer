@@ -23,7 +23,7 @@ public:
     void showCreateAccountDialog();
 
 private:
-    Database &database; // Ссылка на объект Database
+    Database &database;
     QLineEdit *usernameEdit;
     QLineEdit *passwordEdit;
     QString username;

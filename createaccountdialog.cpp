@@ -14,7 +14,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     setWindowTitle("Создание аккаунта");
     resize(505, 375);
 
-    // Основной контейнер с прозрачным тёмным фоном
+
     QWidget *formContainer = new QWidget(this);
     formContainer->setObjectName("formContainer");
     formContainer->setFixedSize(480, 350);
@@ -23,7 +23,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     containerLayout->setContentsMargins(35, 30, 35, 30);
     containerLayout->setSpacing(20);
 
-    // Заголовок
+
     QLabel *titleLabel = new QLabel("Создание нового аккаунта", formContainer);
     titleLabel->setAlignment(Qt::AlignCenter);
     QFont titleFont = titleLabel->font();
@@ -32,7 +32,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     titleLabel->setFont(titleFont);
     titleLabel->setStyleSheet("color: #d8dee9;");
 
-    // Поля ввода
+
     usernameEdit = new QLineEdit(formContainer);
     usernameEdit->setPlaceholderText("Имя пользователя");
     usernameEdit->setObjectName("inputField");
@@ -47,7 +47,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     confirmPasswordEdit->setEchoMode(QLineEdit::Password);
     confirmPasswordEdit->setObjectName("inputField");
 
-    // Иконка для показа/скрытия пароля
+
     QIcon eyeOpenedIcon(QStringLiteral("/Users/hronov/Documents/Keyboard Trainer/icons/opened-eye.svg"));
     QIcon eyeClosedIcon(QStringLiteral("/Users/hronov/Documents/Keyboard Trainer/icons/closed-eye.svg"));
 
@@ -65,13 +65,13 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
         toggleConfirmPasswordAction->setIcon(checked ? eyeOpenedIcon : eyeClosedIcon);
     });
 
-    // Кнопка создания аккаунта
+
     QPushButton *createAccountButton = new QPushButton("Создать аккаунт", formContainer);
     createAccountButton->setObjectName("primaryButton");
     createAccountButton->setDefault(true);
     createAccountButton->setCursor(Qt::PointingHandCursor);
 
-    // Добавляем виджеты в layout
+
     containerLayout->addWidget(titleLabel);
     containerLayout->addWidget(usernameEdit);
     containerLayout->addWidget(passwordEdit);
@@ -84,7 +84,7 @@ CreateAccountDialog::CreateAccountDialog(Database &db, QWidget *parent)
     mainLayout->addStretch();
     mainLayout->setContentsMargins(0,0,0,0);
 
-    // Применяем стиль с тёмной темой, как в вашем примере
+
     setStyleSheet(R"(
         QDialog {
             background-color: #2e3440;

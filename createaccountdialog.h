@@ -20,7 +20,7 @@ public:
         void onCreateAccountClicked();
 
 private:
-    Database &database; // Ссылка на объект Database
+    Database &database;
     QLineEdit *usernameEdit;
     QLineEdit *passwordEdit;
     QLineEdit *confirmPasswordEdit;

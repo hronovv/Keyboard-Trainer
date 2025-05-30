@@ -106,15 +106,33 @@ Window::Window(Database &db, QWidget *parent)
             button->setCursor(Qt::PointingHandCursor);
             if (text == "numbers") {
                 button->setCheckable(true);
-                connect(button, &QPushButton::toggled, this, [this](bool checked){
-                    numbersModeActive_ = checked;
-                    GenerateNewTextFromWordList();
+                connect(button, &QPushButton::toggled, this, [this, button](bool checked){
+                    if (wordsModeActive_) {
+                        numbersModeActive_ = checked;
+                        GenerateNewTextFromWordList();
+                    } else {
+                        QMessageBox::warning(this, "Ошибка", "Сначала выберите список слов.");
+                        if (checked) {
+                            button->blockSignals(true);
+                            button->setChecked(false);
+                            button->blockSignals(false);
+                        }
+                    }
                 });
             } else if (text == "punctuation") {
                 button->setCheckable(true);
-                connect(button, &QPushButton::toggled, this, [this](bool checked){
-                    punctuationModeActive_ = checked;
-                    GenerateNewTextFromWordList();
+                connect(button, &QPushButton::toggled, this, [this, button](bool checked){
+                    if (wordsModeActive_) {
+                        punctuationModeActive_ = checked;
+                        GenerateNewTextFromWordList();
+                    } else {
+                        QMessageBox::warning(this, "Ошибка", "Сначала выберите список слов.");
+                        if (checked) {
+                            button->blockSignals(true);
+                            button->setChecked(false);
+                            button->blockSignals(false);
+                        }
+                    }
                 });
             }
             button->setStyleSheet(R"(
@@ -804,6 +822,12 @@ void Window::GenerateNewTextFromWordList() {
         newSelection.append(nextWord);
         lastWasPunctuation = false;
         ++i;
+
+        // Если текущее слово — число, сбросить флаг capitalizeNextWord,
+        // чтобы следующее слово не начиналось с заглавной буквы
+        if (!nextWord.isEmpty() && nextWord[0].isDigit()) {
+            capitalizeNextWord = false;
+        }
 
         if (punctuationChance == 0.0)
             continue;

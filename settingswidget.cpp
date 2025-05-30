@@ -166,8 +166,9 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     wordSpacingSpinBox_ = new QSpinBox(this);
     wordSpacingSpinBox_->setRange(0, 50);
 
-    fontComboBox_ = new QFontComboBox(this);
+    fontComboBox_ = new FontSelector(this);
     fontComboBox_->setMinimumWidth(250);
+    fontComboBox_->setFixedHeight(72);
 
     fontSizeSpinBox_ = new QSpinBox(this);
     fontSizeSpinBox_->setRange(8, 72);
@@ -294,7 +295,7 @@ QString SettingsWidget::getCheckedButtonValue(const QList<QPushButton*> &buttons
 void SettingsWidget::applySettingsToUI(const UserSettings &settings) {
     letterSpacingSpinBox_->setValue(settings.letter_spacing);
     wordSpacingSpinBox_->setValue(settings.word_spacing);
-    fontComboBox_->setCurrentFont(QFont(settings.font));
+    fontComboBox_->setCurrentFont(settings.font);
     fontSizeSpinBox_->setValue(settings.font_size);
     fontWeightSpinBox_->setValue(settings.font_weight);
     lineHeightSpinBox_->setValue(settings.line_height);
@@ -312,7 +313,7 @@ UserSettings SettingsWidget::getSettingsFromUI() const {
     UserSettings s;
     s.letter_spacing = letterSpacingSpinBox_->value();
     s.word_spacing = wordSpacingSpinBox_->value();
-    s.font = fontComboBox_->currentFont().family();
+    s.font = fontComboBox_->currentFont();
     s.font_size = fontSizeSpinBox_->value();
     s.font_weight = fontWeightSpinBox_->value();
     s.line_height = lineHeightSpinBox_->value();

@@ -7,6 +7,8 @@
 #include <QPushButton>
 #include <QList>
 #include "database.h"
+#include "fontselector.h"
+
 
 class SettingsWidget : public QWidget {
     Q_OBJECT
@@ -28,7 +30,7 @@ private:
 
     QSpinBox *letterSpacingSpinBox_;
     QSpinBox *wordSpacingSpinBox_;
-    QFontComboBox *fontComboBox_;
+    FontSelector* fontComboBox_;
     QSpinBox *fontSizeSpinBox_;
     QSpinBox *fontWeightSpinBox_;
     QSpinBox *lineHeightSpinBox_;

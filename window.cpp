@@ -30,6 +30,25 @@ Window::Window(Database &db, QWidget *parent)
     connect(typing_timer_, &QTimer::timeout, this, &Window::UpdateWPM);
     elapsed_seconds_ = 0;
 
+    countdownTimer_ = new QTimer(this);
+    countdownTimer_->setInterval(1000);
+
+    connect(countdownTimer_, &QTimer::timeout, this, [this]() {
+        if (timeRemaining_ > 0) {
+        timeRemaining_--;
+        timeLabel_->setText(QString("Осталось времени: %1 с").arg(timeRemaining_));
+        } else {
+            countdownTimer_->stop();
+            typing_allowed_ = false;
+            StopTypingTimer();
+            timeLabel_->setText("Осталось времени: 0 с");
+            timeRemaining_ = 1;
+            QMessageBox::information(this, "Время вышло", "Время теста закончилось.");
+            keyboardWidget_->clearHighlight();
+            timeLabel_->setText("");
+        }
+    });
+
 
     generated_text_ = new QLabel(this);
     generated_text_->setObjectName("generatedText");
@@ -42,6 +61,10 @@ Window::Window(Database &db, QWidget *parent)
     statusLabel_ = new QLabel("RAW WPM: 0 | Точность: 100% | WPM: 0", this);
     statusLabel_->setObjectName("statusLabel");
     statusLabel_->setAlignment(Qt::AlignBottom | Qt::AlignCenter);
+
+    timeLabel_ = new QLabel(this);
+    timeLabel_->setObjectName("timeLabel");
+    timeLabel_->setAlignment(Qt::AlignBottom | Qt::AlignCenter);
 
 
     keyboardWidget_ = new KeyboardWidget(this);
@@ -107,7 +130,7 @@ Window::Window(Database &db, QWidget *parent)
             if (text == "numbers") {
                 button->setCheckable(true);
                 connect(button, &QPushButton::toggled, this, [this, button](bool checked){
-                    if (wordsModeActive_) {
+                    if (!currentWordList_.isEmpty()) {
                         numbersModeActive_ = checked;
                         GenerateNewTextFromWordList();
                     } else {
@@ -122,7 +145,7 @@ Window::Window(Database &db, QWidget *parent)
             } else if (text == "punctuation") {
                 button->setCheckable(true);
                 connect(button, &QPushButton::toggled, this, [this, button](bool checked){
-                    if (wordsModeActive_) {
+                    if (!currentWordList_.isEmpty()) {
                         punctuationModeActive_ = checked;
                         GenerateNewTextFromWordList();
                     } else {
@@ -132,6 +155,31 @@ Window::Window(Database &db, QWidget *parent)
                             button->setChecked(false);
                             button->blockSignals(false);
                         }
+                    }
+                });
+            } else if (text == "time") {
+                button->setCheckable(true);
+                connect(button, &QPushButton::toggled, this, [this, button](bool checked){
+                    if (checked) {
+                        if (currentWordList_.isEmpty()) {
+                            QMessageBox::warning(this, "Ошибка", "Сначала выберите список слов.");
+                            button->blockSignals(true);
+                            button->setChecked(false);
+                            button->blockSignals(false);
+                            return;
+                        }
+
+                        wordsModeActive_ = false;
+                        timeModeActive_ = true;
+                        ShowTimeSelectorDialog();
+                        timeRemaining_ = selectedTimeSeconds_;
+                        GenerateNewTextFromWordList();
+                    } else {
+                        timeModeActive_ = false;
+                        countdownTimer_->stop();
+                        typing_allowed_ = false;
+                        generated_text_->clear();
+                        GenerateNewTextFromWordList();
                     }
                 });
             }
@@ -178,7 +226,7 @@ Window::Window(Database &db, QWidget *parent)
     addCategoryWidget("language", true);
     addCategoryWidget("punctuation",true);
     addCategoryWidget("numbers",true);
-    addCategoryWidget("time");
+    addCategoryWidget("time", true);
     addCategoryWidget("words", true);
     addCategoryWidget("quote",true);
     addCategoryWidget("amount", true);
@@ -199,6 +247,7 @@ Window::Window(Database &db, QWidget *parent)
     main_layout->addWidget(generated_text_, 0, Qt::AlignHCenter);
     main_layout->addWidget(keyboardWidget_, 0, Qt::AlignHCenter);
     main_layout->addSpacing(20);
+    main_layout->addWidget(timeLabel_, 0, Qt::AlignHCenter);
     main_layout->addWidget(statusLabel_, 0, Qt::AlignHCenter);
     main_layout->addStretch();
     main_layout->setContentsMargins(10, 10, 10, 20);
@@ -237,6 +286,11 @@ Window::Window(Database &db, QWidget *parent)
             background: transparent
         }
         QLabel#statusLabel {
+            font-size: 20px;
+            letter-spacing: 2px;
+            word-spacing: 2px;
+        }
+        QLabel#timeLabel {
             font-size: 20px;
             letter-spacing: 2px;
             word-spacing: 2px;
@@ -391,9 +445,20 @@ void Window::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
-    if (event->key() == Qt::Key_Tab && (wordsModeActive_ || numbersModeActive_)) {
+    if (timeModeActive_ && !countdownTimer_->isActive()) {
+        StartCountdownTimer();
+    }
+
+    if (event->key() == Qt::Key_Tab) {
         event->accept();
         keyboardWidget_->clearHighlight();
+        if (timeModeActive_) {
+            StopTypingTimer();
+            countdownTimer_->stop();
+            timeRemaining_ = selectedTimeSeconds_;
+            typing_allowed_ = false;
+            timeLabel_->setText(QString("Осталось времени: %1 с").arg(timeRemaining_));
+        }
         GenerateNewTextFromWordList();
         return;
     }
@@ -475,7 +540,7 @@ void Window::keyPressEvent(QKeyEvent* event) {
 
     generated_text_->setText(colored_text);
 
-    if (currentIndex_ == targetText_.length()) {
+    if (currentIndex_ == targetText_.length() || timeRemaining_ <= 0) {
         typing_allowed_ = false;
         double minutes = elapsed_seconds_ / kSecondsInMinute;
         double raw_wpm = (typedCharCount_ / kWpmCoefficient) / minutes;
@@ -511,25 +576,6 @@ void Window::ApplyTextStyles() {
     );
 }
 
-void Window::LoadTextFromFile() {
-    QString file_name = QFileDialog::getOpenFileName(this, "Выберите текстовый файл", "",
-                                                    "Текстовые файлы (*.txt);;Все файлы (*.*)");
-    if (file_name.isEmpty())
-        return;
-
-    QFile file(file_name);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, "Ошибка", "Не удалось открыть файл.");
-        return;
-    }
-
-    QTextStream in(&file);
-    QString text = in.readAll();
-    file.close();
-
-    generated_text_->setText(text);
-    ResetText();
-}
 
 void Window::showLoginDialog() {
     if (!database_.initDatabase()) {
@@ -771,6 +817,11 @@ void Window::ShowWordSetDialog() {
 
 void Window::GenerateNewTextFromWordList() {
     typing_allowed_ = true;
+
+    if (timeModeActive_) {
+        timeRemaining_ = selectedTimeSeconds_;
+    }
+
     QStringList newSelection;
     int count = currentWordAmount_;
 
@@ -875,7 +926,7 @@ void Window::ShowStats() {
         return;
     }
 
-    QVector<QPair<QDateTime, QPair<double,double>>> sessions = database_.getTypingSessionsForUser(currentUsername_);
+    QVector<QPair<QDateTime, QPair<double,double>>> sessions = database_.getTypingSessions(currentUsername_);
     if (sessions.isEmpty()) {
         QMessageBox::information(this, "Статистика", "Нет данных о тестах для пользователя");
         return;
@@ -1349,4 +1400,168 @@ void Window::ShowAmountSelectorDialog() {
 
     setGraphicsEffect(nullptr);
     overlay->deleteLater();
+}
+
+void Window::ShowTimeSelectorDialog() {
+    QWidget *overlay = new QWidget(this);
+    overlay->setObjectName("overlayWidget");
+    overlay->setGeometry(this->rect());
+    overlay->setStyleSheet("background-color: rgba(0, 0, 0, 120);");
+    overlay->show();
+
+    QGraphicsBlurEffect *blur = new QGraphicsBlurEffect(overlay);
+    blur->setBlurRadius(40);
+    this->setGraphicsEffect(blur);
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Выберите длительность теста в секундах");
+    dialog.setModal(true);
+    dialog.resize(400, 250);
+
+    QWidget *formContainer = new QWidget(&dialog);
+    formContainer->setObjectName("formContainer");
+    formContainer->setFixedSize(360, 200);
+
+    QVBoxLayout *formLayout = new QVBoxLayout(formContainer);
+    formLayout->setContentsMargins(30, 25, 30, 25);
+    formLayout->setSpacing(20);
+
+    QLabel *titleLabel = new QLabel("Введите время (в секундах)", formContainer);
+    QFont titleFont = titleLabel->font();
+    titleFont.setPointSize(20);
+    titleFont.setBold(true);
+    titleLabel->setFont(titleFont);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet("color: #d8dee9;");
+
+    QLineEdit *inputLine = new QLineEdit(formContainer);
+    inputLine->setValidator(new QIntValidator(1, 3600, &dialog)); // от 1 до 3600 сек (1 час)
+    inputLine->setText(QString::number(selectedTimeSeconds_));
+    inputLine->setPlaceholderText("Число от 1 до 3600");
+    inputLine->setObjectName("inputField");
+    inputLine->setFixedHeight(50);
+
+    QHBoxLayout *actionsLayout = new QHBoxLayout();
+    actionsLayout->setSpacing(20);
+
+    QPushButton *okButton = new QPushButton("OK", formContainer);
+    okButton->setObjectName("primaryButton");
+    okButton->setDefault(true);
+    okButton->setCursor(Qt::PointingHandCursor);
+    okButton->setFixedSize(100, 40);
+
+    QPushButton *cancelButton = new QPushButton("Отмена", formContainer);
+    cancelButton->setObjectName("secondaryButton");
+    cancelButton->setCursor(Qt::PointingHandCursor);
+    cancelButton->setFixedSize(100, 40);
+
+    actionsLayout->addStretch();
+    actionsLayout->addWidget(okButton);
+    actionsLayout->addWidget(cancelButton);
+    actionsLayout->addStretch();
+
+    formLayout->addWidget(titleLabel);
+    formLayout->addWidget(inputLine);
+    formLayout->addLayout(actionsLayout);
+
+    QVBoxLayout *dialogLayout = new QVBoxLayout(&dialog);
+    dialogLayout->addStretch();
+    dialogLayout->addWidget(formContainer, 0, Qt::AlignHCenter);
+    dialogLayout->addStretch();
+    dialogLayout->setContentsMargins(0, 0, 0, 0);
+
+    dialog.setStyleSheet(R"(
+        QDialog {
+            background-color: #2e3440;
+            color: #d8dee9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana;
+            font-weight: normal;
+        }
+        #formContainer {
+            background-color: #3b4252;
+            border-radius: 12px;
+        }
+        #inputField {
+            background-color: #3b4252;
+            border: 1.5px solid #4c566a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: #eceff4;
+            font-size: 16px;
+            font-weight: normal;
+            margin-bottom: 10px;
+        }
+        #inputField:focus {
+            border: 1.5px solid #88c0d0;
+            background-color: #434c5e;
+            outline: none;
+        }
+        QPushButton#primaryButton {
+            background-color: #667eea;
+            color: white;
+            border-radius: 14px;
+            font-weight: normal;
+            font-size: 16px;
+            border: none;
+        }
+        QPushButton#primaryButton:hover {
+            background-color: #556cd6;
+        }
+        QPushButton#primaryButton:pressed {
+            background-color: #4455b2;
+        }
+        QPushButton#secondaryButton {
+            background-color: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+            border-radius: 14px;
+            font-weight: normal;
+            font-size: 14px;
+        }
+        QPushButton#secondaryButton:hover {
+            background-color: #667eea;
+            color: white;
+        }
+        QPushButton#secondaryButton:pressed {
+            background-color: #556cd6;
+            border-color: #4455b2;
+        }
+    )");
+
+    QRect screen_geometry = this->screen()->geometry();
+    dialog.move(
+        (screen_geometry.width() - dialog.width()) / 2,
+        (screen_geometry.height() - dialog.height()) / 2);
+
+    connect(okButton, &QPushButton::clicked, &dialog, [&dialog, inputLine]() {
+        bool ok = false;
+        int val = inputLine->text().toInt(&ok);
+        if (!ok || val <= 0) {
+            inputLine->setFocus();
+            return;
+        }
+        dialog.accept();
+    });
+
+    connect(cancelButton, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        bool ok = false;
+        int val = inputLine->text().toInt(&ok);
+        if (ok && val > 0) {
+            selectedTimeSeconds_ = val;
+            timeLabel_->setText(QString("Осталось времени: %1 с").arg(selectedTimeSeconds_));
+            GenerateNewTextFromWordList();
+        }
+    }
+
+    setGraphicsEffect(nullptr);
+    overlay->deleteLater();
+}
+
+void Window::StartCountdownTimer() {
+    if (!countdownTimer_->isActive()) {
+        timeRemaining_ = selectedTimeSeconds_;
+        countdownTimer_->start();
+    }
 }

@@ -34,7 +34,7 @@ public:
     bool updateUserSetting(const QString &username, const QString &settingName, const QVariant &value);
     UserSettings getUserSettings(const QString &username);
     bool saveTypingSession(const QString &username, double wpm, double accuracy);
-    QVector<QPair<QDateTime, QPair<double, double>>> getTypingSessionsForUser(const QString &username);
+    QVector<QPair<QDateTime, QPair<double, double>>> getTypingSessions(const QString &username);
 
 
 private:

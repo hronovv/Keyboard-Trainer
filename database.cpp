@@ -182,7 +182,7 @@ bool Database::saveTypingSession(const QString &username, double wpm, double acc
     return true;
 }
 
-QVector<QPair<QDateTime, QPair<double, double>>> Database::getTypingSessionsForUser(const QString &username) {
+QVector<QPair<QDateTime, QPair<double, double>>> Database::getTypingSessions(const QString &username) {
     QVector<QPair<QDateTime, QPair<double, double>>> result;
 
     QSqlQuery query(db);

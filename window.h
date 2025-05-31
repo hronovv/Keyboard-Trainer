@@ -124,7 +124,6 @@ private slots:
     void Prompt();
     void ShowLanguageDialog();
     void DisableTyping();
-    void LoadTextFromFile();
     void showLoginDialog();
     void ShowSettings();
     void ShowWordSetDialog();
@@ -132,6 +131,8 @@ private slots:
     void random();
     void ShowKeyboardLayoutDialog();
     void ShowAmountSelectorDialog();
+    void ShowTimeSelectorDialog();
+    void StartCountdownTimer();
 
 private:
     // Typing related methods
@@ -145,6 +146,7 @@ private:
     // UI elements
     QLabel* generated_text_;
     QLabel* statusLabel_;
+    QLabel* timeLabel_;
     QLabel* usernameLabel_;
     SettingsWidget *settingsWidget_;
     QSvgWidget* accountIconLabel;
@@ -185,6 +187,11 @@ private:
     int lineHeight_ = kDefaultLineHeight;
     QString caretSmooth_;
     QString caretStyle_ = "off";
+
+    bool timeModeActive_ = false;
+    int selectedTimeSeconds_ = 60;
+    QTimer* countdownTimer_ = nullptr;
+    int timeRemaining_ = 1;
 
     QMap<QString, QString> caretMap = {
         { "off", "off" },

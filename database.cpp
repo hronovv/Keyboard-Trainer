@@ -38,7 +38,6 @@ bool Database::initDatabase() {
                "word_spacing INTEGER DEFAULT 2, "
                "font_weight INTEGER DEFAULT 500, "
                "line_height INTEGER DEFAULT 20,"
-               "caret_smooth TEXT DEFAULT off,"
                "caret_style TEXT DEFAULT '▮',"
                "keyboard_layout TEXT DEFAULT 'qwerty',"
                "words_amount INTEGER DEFAULT 10"
@@ -106,7 +105,7 @@ bool Database::userExists(const QString &username) {
 
 bool Database::updateUserSetting(const QString &username, const QString &settingName, const QVariant &value) {
     static const QSet<QString> allowedColumns = {"font", "font_color", "font_size", "letter_spacing",
-        "word_spacing", "font_weight", "line_height","caret_smooth", "caret_style","keyboard_layout","words_amount"};
+        "word_spacing", "font_weight", "line_height", "caret_style","keyboard_layout","words_amount"};
     if (!allowedColumns.contains(settingName)) {
         qDebug() << "Invalid setting name:" << settingName;
         return false;
@@ -134,7 +133,7 @@ UserSettings Database::getUserSettings(const QString &username) {
     UserSettings settings;
     QSqlQuery query(db);
     query.prepare("SELECT font, font_color, font_size, letter_spacing, word_spacing, font_weight, "
-                  "line_height, caret_smooth, caret_style, keyboard_layout, words_amount FROM users WHERE username = "
+                  "line_height,caret_style, keyboard_layout, words_amount FROM users WHERE username = "
                   ":username LIMIT 1");
     query.bindValue(":username", username);
 
@@ -146,10 +145,9 @@ UserSettings Database::getUserSettings(const QString &username) {
         settings.word_spacing = query.value(4).toInt();
         settings.font_weight = query.value(5).toInt();
         settings.line_height = query.value(6).toInt();
-        settings.caret_smooth = query.value(7).toString();
-        settings.caret_style = query.value(8).toString();
-        settings.keyboard_layout = query.value(9).toString();
-        settings.words_amount = query.value(10).toInt();
+        settings.caret_style = query.value(7).toString();
+        settings.keyboard_layout = query.value(8).toString();
+        settings.words_amount = query.value(9).toInt();
 
     } else {
         qDebug() << "Failed to get user settings:" << query.lastError().text();
@@ -169,7 +167,6 @@ bool Database::saveTypingSession(const QString &username, double wpm, double acc
 
     int user_id = query.value(0).toInt();
 
-    // Вставляем новую запись
     query.prepare("INSERT INTO typing_sessions (user_id, wpm, accuracy) VALUES (:user_id, :wpm, :accuracy)");
     query.bindValue(":user_id", user_id);
     query.bindValue(":wpm", wpm);

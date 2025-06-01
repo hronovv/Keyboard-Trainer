@@ -14,7 +14,6 @@ struct UserSettings {
     int word_spacing;
     int font_weight;
     int line_height;
-    QString caret_smooth;
     QString caret_style;
     QString keyboard_layout;
     int words_amount;

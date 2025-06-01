@@ -19,7 +19,6 @@ Window::Window(Database &db, QWidget *parent)
         fontWeight_ = s.font_weight;
         lineHeight_ = s.line_height;
         caretStyle_ = s.caret_style;
-        caretSmooth_ = s.caret_smooth;
 
         ApplyTextStyles();
     });
@@ -608,7 +607,6 @@ void Window::LoadUserSettings() {
     wordSpacing_ = settings.word_spacing;
     fontWeight_ = settings.font_weight;
     lineHeight_ = settings.line_height;
-    caretSmooth_ = caretMap.value(settings.caret_smooth);
     caretStyle_ = settings.caret_style;
     currentWordAmount_= settings.words_amount;
     keyboardWidget_->loadLayoutFromJson("/Users/hronov/Documents/Keyboard Trainer/keyboard_layouts/" +

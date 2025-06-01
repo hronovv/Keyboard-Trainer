@@ -209,13 +209,6 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     addLabeledWidget("Межстрочный интервал:", lineHeightSpinBox_);
     addLabeledWidget("Цвет текста:", colorButton_);
 
-
-    QWidget* caretSmoothWidget = nullptr;
-    caretSmoothButtons_.clear();
-    createOptionButtons("Caret", "The caret will move smoothly between letters and words.",
-        {"off", "slow", "medium", "fast"}, caretSmoothWidget, caretSmoothButtons_,
-        "background-color: #d08770; color: #2e3440; font-weight: 700;");
-
     QWidget* caretStyleWidget = nullptr;
     caretStyleButtons_.clear();
     createOptionButtons("Caret style", "Change the style of the caret during the test.",
@@ -227,7 +220,6 @@ SettingsWidget::SettingsWidget(Database &db, QString username, QWidget *parent)
     QVBoxLayout* caretSettingsLayout = new QVBoxLayout(caretSettingsContainer);
     caretSettingsLayout->setContentsMargins(0, 0, 0, 0);
     caretSettingsLayout->setSpacing(10);
-    caretSettingsLayout->addWidget(caretSmoothWidget);
     caretSettingsLayout->addWidget(caretStyleWidget);
 
 
@@ -301,9 +293,6 @@ void SettingsWidget::applySettingsToUI(const UserSettings &settings) {
     lineHeightSpinBox_->setValue(settings.line_height);
     currentColor_ = settings.font_color;
     colorButton_->setStyleSheet(QString("background-color: %1").arg(currentColor_.name()));
-    for (QPushButton* btn : caretSmoothButtons_) {
-        btn->setChecked(btn->text() == settings.caret_smooth);
-    }
     for (QPushButton* btn : caretStyleButtons_) {
         btn->setChecked(btn->text() == settings.caret_style);
     }
@@ -318,7 +307,6 @@ UserSettings SettingsWidget::getSettingsFromUI() const {
     s.font_weight = fontWeightSpinBox_->value();
     s.line_height = lineHeightSpinBox_->value();
     s.font_color = currentColor_;
-    s.caret_smooth = getCheckedButtonValue(caretSmoothButtons_);
     s.caret_style = getCheckedButtonValue(caretStyleButtons_);
     return s;
 }
@@ -343,7 +331,6 @@ void SettingsWidget::saveSettings() {
     success &= database_.updateUserSetting(username_, "word_spacing", s.word_spacing);
     success &= database_.updateUserSetting(username_, "font_weight", s.font_weight);
     success &= database_.updateUserSetting(username_, "line_height", s.line_height);
-    success &= database_.updateUserSetting(username_, "caret_smooth", s.caret_smooth);
     success &= database_.updateUserSetting(username_, "caret_style", s.caret_style);
     if (!success) {
         QMessageBox::warning(this, "Ошибка", "Не удалось сохранить настройки");

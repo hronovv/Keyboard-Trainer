@@ -207,7 +207,7 @@ Window::Window(Database &db, QWidget *parent)
                 { "language", [this]() { ShowLanguageDialog(); } },
                 { "stop", [this]() { DisableTyping(); } },
                 { "stats", [this]() { ShowStats(); } },
-                { "quote", [this]() { random(); } },
+                { "quote", [this]() { ShowQuoteSetDialog(); } },
                 { "amount", [this]() { ShowAmountSelectorDialog(); }},
             };
 
@@ -1562,4 +1562,285 @@ void Window::StartCountdownTimer() {
         timeRemaining_ = selectedTimeSeconds_;
         countdownTimer_->start();
     }
+}
+
+void Window::ShowQuoteSetDialog() {
+    QWidget *overlay = new QWidget(this);
+    overlay->setObjectName("overlayWidget");
+    overlay->setGeometry(this->rect());
+    overlay->setStyleSheet("background-color: rgba(0, 0, 0, 100);");
+    overlay->show();
+
+    QGraphicsBlurEffect *blur = new QGraphicsBlurEffect(overlay);
+    blur->setBlurRadius(40);
+    this->setGraphicsEffect(blur);
+
+    QString quotesPath = "/Users/hronov/Documents/Keyboard Trainer/quotes";
+    QDir dir(quotesPath);
+    QStringList filters {"*.json"};
+    QFileInfoList fileList = dir.entryInfoList(filters, QDir::Files | QDir::NoSymLinks);
+
+    if (fileList.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Папка quotes пуста или не найдены JSON файлы");
+        overlay->deleteLater();
+        this->setGraphicsEffect(nullptr);
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Выберите файл с цитатами");
+    dialog.setModal(true);
+    dialog.setFixedSize(350, 480); // увеличим под кнопку
+
+    QVBoxLayout dialogLayout(&dialog);
+
+    QLineEdit searchEdit(&dialog);
+    searchEdit.setPlaceholderText("Поиск...");
+    dialogLayout.addWidget(&searchEdit);
+
+    QListWidget fileListWidget(&dialog);
+    for (const QFileInfo &fileInfo : fileList) {
+        QString name = fileInfo.completeBaseName();
+        name.replace('_', ' ');
+        fileListWidget.addItem(name);
+    }
+    dialogLayout.addWidget(&fileListWidget);
+
+
+    QPushButton randomFileButton("Выбрать случайный файл", &dialog);
+    randomFileButton.setCursor(Qt::PointingHandCursor);
+    dialogLayout.addWidget(&randomFileButton);
+
+    connect(&searchEdit, &QLineEdit::textChanged, this, [&fileListWidget](const QString &text){
+        QString filter = text.trimmed();
+        for (int i = 0; i < fileListWidget.count(); ++i) {
+            QListWidgetItem *item = fileListWidget.item(i);
+            bool match = item->text().contains(filter, Qt::CaseInsensitive);
+            item->setHidden(!match);
+        }
+    });
+
+    std::function<void(const QString&)> openSecondDialogFromFile = [&](const QString& fileNameRaw) {
+        QString fileName = fileNameRaw;
+        fileName.replace(' ', '_');
+        fileName += ".json";
+
+        QString fullPath = quotesPath + '/' + fileName;
+        QFile file(fullPath);
+        if (!file.open(QIODevice::ReadOnly)) {
+            QMessageBox::warning(this, "Ошибка", "Не удалось открыть файл " + fileName);
+            overlay->deleteLater();
+            this->setGraphicsEffect(nullptr);
+            return;
+        }
+        QByteArray jsonData = file.readAll();
+        file.close();
+
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(jsonData, &parseError);
+        if (parseError.error != QJsonParseError::NoError) {
+            QMessageBox::warning(this, "Ошибка", "Ошибка парсинга JSON: " + parseError.errorString());
+            overlay->deleteLater();
+            this->setGraphicsEffect(nullptr);
+            return;
+        }
+
+        QJsonObject rootObj = doc.object();
+
+        if (!rootObj.contains("groups") || !rootObj.contains("quotes")) {
+            QMessageBox::warning(this, "Ошибка", "В файле нет обязательных полей groups или quotes");
+            overlay->deleteLater();
+            this->setGraphicsEffect(nullptr);
+            return;
+        }
+
+        QJsonArray groupsArray = rootObj.value("groups").toArray();
+        QJsonArray quotesArray = rootObj.value("quotes").toArray();
+
+        struct QuoteItem {
+            int id;
+            QString source;
+            QString text;
+            int length;
+        };
+        QVector<QuoteItem> allQuotes;
+        for (const QJsonValue &val : quotesArray) {
+            if (!val.isObject()) continue;
+            QJsonObject obj = val.toObject();
+            QuoteItem q;
+            q.id = obj.value("id").toInt();
+            q.source = obj.value("source").toString();
+            q.text = obj.value("text").toString();
+            q.length = obj.value("length").toInt();
+            allQuotes.append(q);
+        }
+
+        QDialog secondDialog(this);
+        secondDialog.setWindowTitle("Выберите группу цитат");
+        secondDialog.setModal(true);
+        secondDialog.resize(500, 650);
+
+        QVBoxLayout secondLayout(&secondDialog);
+
+        QLabel groupLabel("Выберите диапазон длины цитат:", &secondDialog);
+        secondLayout.addWidget(&groupLabel);
+
+        QListWidget groupListWidget(&secondDialog);
+
+        QVector<QPair<int,int>> groupRanges;
+        for (const QJsonValue &groupVal : groupsArray) {
+            if (groupVal.isArray()) {
+                QJsonArray rangeArr = groupVal.toArray();
+                if (rangeArr.size() == 2) {
+                    int from = rangeArr.at(0).toInt();
+                    int to = rangeArr.at(1).toInt();
+                    groupRanges.append(qMakePair(from, to));
+                    groupListWidget.addItem(QString("%1 - %2 символов").arg(from).arg(to));
+                }
+            }
+        }
+        secondLayout.addWidget(&groupListWidget);
+
+        QLabel quoteLabel("Выберите цитату:", &secondDialog);
+        secondLayout.addWidget(&quoteLabel);
+
+        QListWidget quoteListWidget(&secondDialog);
+        secondLayout.addWidget(&quoteListWidget);
+
+
+        QPushButton randomQuoteButton("Выбрать случайную цитату", &secondDialog);
+        randomQuoteButton.setCursor(Qt::PointingHandCursor);
+        secondLayout.addWidget(&randomQuoteButton);
+
+        connect(&groupListWidget, &QListWidget::currentRowChanged, this,
+                [&](int row) {
+            quoteListWidget.clear();
+            if (row < 0 || row >= groupRanges.size()) return;
+
+            int fromLen = groupRanges[row].first;
+            int toLen = groupRanges[row].second;
+
+            for (const QuoteItem &q : allQuotes) {
+                if (q.length >= fromLen && q.length <= toLen) {
+                    QString summary = q.text;
+                    if (summary.length() > 80)
+                        summary = summary.left(77) + "...";
+                    QString displayText = QString("%1\n— %2").arg(summary).arg(q.source);
+                    QListWidgetItem *item = new QListWidgetItem(displayText, &quoteListWidget);
+                    item->setData(Qt::UserRole, q.id);
+                }
+            }
+        });
+
+        if (!groupRanges.isEmpty()) {
+            groupListWidget.setCurrentRow(0);
+        }
+
+        QHBoxLayout buttonsLayout;
+        QPushButton okButton("OK", &secondDialog);
+        okButton.setDefault(true);
+        QPushButton cancelButton("Отмена", &secondDialog);
+        buttonsLayout.addStretch();
+        buttonsLayout.addWidget(&okButton);
+        buttonsLayout.addWidget(&cancelButton);
+        buttonsLayout.addStretch();
+        secondLayout.addLayout(&buttonsLayout);
+
+
+        QObject::connect(&randomQuoteButton, &QPushButton::clicked, &secondDialog, [&]() {
+            int row = groupListWidget.currentRow();
+            if (row < 0 || row >= groupRanges.size()) {
+                QMessageBox::information(&secondDialog, "Ошибка", "Сначала выберите группу цитат.");
+                return;
+            }
+
+
+            QVector<const QuoteItem*> filteredQuotes;
+            int fromLen = groupRanges[row].first;
+            int toLen = groupRanges[row].second;
+            for (const QuoteItem &q : allQuotes) {
+                if (q.length >= fromLen && q.length <= toLen) {
+                    filteredQuotes.append(&q);
+                }
+            }
+
+            if (filteredQuotes.isEmpty()) {
+                QMessageBox::information(&secondDialog, "Ошибка", "В этой группе нет цитат.");
+                return;
+            }
+
+
+            int idx = QRandomGenerator::global()->bounded(filteredQuotes.size());
+            const QuoteItem *randomQuote = filteredQuotes[idx];
+
+            generated_text_->setText(randomQuote->text);
+            ResetText();
+            wordsModeActive_ = false;
+            timeModeActive_ = false;
+            typing_allowed_ = true;
+
+            secondDialog.accept();
+        });
+
+        QObject::connect(&okButton, &QPushButton::clicked, &secondDialog, [&]() {
+            if (quoteListWidget.currentItem()) {
+                secondDialog.accept();
+            } else {
+                QMessageBox::information(&secondDialog, "Выбор цитаты", "Пожалуйста, выберите цитату.");
+            }
+        });
+
+        QObject::connect(&cancelButton, &QPushButton::clicked, &secondDialog, &QDialog::reject);
+
+        int result = secondDialog.exec();
+
+        if (result == QDialog::Accepted && quoteListWidget.currentItem()) {
+
+            QString selectedText = quoteListWidget.currentItem()->text();
+
+            int selectedId = quoteListWidget.currentItem()->data(Qt::UserRole).toInt();
+            QString fullText;
+            for (const QuoteItem &q : allQuotes) {
+                if (q.id == selectedId) {
+                    fullText = q.text;
+                    break;
+                }
+            }
+
+            if (!fullText.isEmpty()) {
+                generated_text_->setText(fullText);
+                ResetText();
+                wordsModeActive_ = false;
+                timeModeActive_ = false;
+                typing_allowed_ = true;
+            }
+        }
+
+        this->setGraphicsEffect(nullptr);
+        overlay->deleteLater();
+    };
+
+
+    connect(&fileListWidget, &QListWidget::itemClicked, this, [&](QListWidgetItem* item){
+        openSecondDialogFromFile(item->text());
+        dialog.accept();
+    });
+
+
+    connect(&randomFileButton, &QPushButton::clicked, this, [&]() {
+        int idx = QRandomGenerator::global()->bounded(fileList.size());
+        QString rndFileName = fileList.at(idx).completeBaseName();
+        openSecondDialogFromFile(rndFileName);
+        dialog.accept();
+    });
+
+    QRect screen_geometry = this->screen()->geometry();
+    dialog.move(
+        (screen_geometry.width() - dialog.width()) / 2,
+        (screen_geometry.height() - dialog.height()) / 2);
+
+    dialog.exec();
+
+    this->setGraphicsEffect(nullptr);
+    overlay->deleteLater();
 }

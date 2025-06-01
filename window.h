@@ -133,6 +133,7 @@ private slots:
     void ShowAmountSelectorDialog();
     void ShowTimeSelectorDialog();
     void StartCountdownTimer();
+    void ShowQuoteSetDialog();
 
 private:
     // Typing related methods

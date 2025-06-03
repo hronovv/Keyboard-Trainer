@@ -157,31 +157,37 @@ Window::Window(Database &db, QWidget *parent)
                     }
                 });
             } else if (text == "time") {
-                button->setCheckable(true);
-                connect(button, &QPushButton::toggled, this, [this, button](bool checked){
-                    if (checked) {
-                        if (currentWordList_.isEmpty()) {
-                            QMessageBox::warning(this, "Ошибка", "Сначала выберите список слов.");
-                            button->blockSignals(true);
-                            button->setChecked(false);
-                            button->blockSignals(false);
-                            return;
-                        }
+                    button->setCheckable(true);
+                    timeModeButton_ = button; // сохраняем указатель на эту кнопку
 
-                        wordsModeActive_ = false;
-                        timeModeActive_ = true;
-                        ShowTimeSelectorDialog();
-                        timeRemaining_ = selectedTimeSeconds_;
-                        GenerateNewTextFromWordList();
-                    } else {
-                        timeModeActive_ = false;
-                        countdownTimer_->stop();
-                        typing_allowed_ = false;
-                        generated_text_->clear();
-                        GenerateNewTextFromWordList();
-                    }
-                });
-            }
+                    connect(button, &QPushButton::toggled, this, [this, button](bool checked){
+                        if (checked) {
+                            if (currentWordList_.isEmpty()) {
+                                QMessageBox::warning(this, "Ошибка", "Сначала выберите список слов.");
+                                button->blockSignals(true);
+                                button->setChecked(false);
+                                button->blockSignals(false);
+                                return;
+                            }
+
+                            wordsModeActive_ = false;
+                            timeModeActive_ = true;
+                            ShowTimeSelectorDialog();
+                            timeRemaining_ = selectedTimeSeconds_;
+                            GenerateNewTextFromWordList();
+                        } else {
+                            timeModeActive_ = false;
+                            countdownTimer_->stop();
+                            typing_allowed_ = false;
+                            generated_text_->clear();
+                            GenerateNewTextFromWordList();
+                            timeLabel_->clear();
+                            if (timeModeButton_) {
+                                timeModeButton_->setChecked(false);
+                            }
+                        }
+                    });
+                }
             button->setStyleSheet(R"(
             QPushButton {
                 color: #eee;
@@ -328,35 +334,63 @@ void Window::Prompt() {
         return;
     }
 
-    try {
-        typing_allowed_ = false;
-
-        QString request = QString::fromStdString(
-            kPromptTemplatePart1
-            + std::to_string(kWordsNumber)
-            + kPromptTemplatePart2
-            + "IMPORTANT. set-language:" + prompt_language_.toStdString()
-        );
-
-        QString result_final = QString::fromStdString(getResponse(request.toStdString()));
-        generated_text_->setText(result_final);
-        ResetText();
-
-        effect_ = new QGraphicsOpacityEffect(this);
-        generated_text_->setGraphicsEffect(effect_);
-
-        animation_ = new QPropertyAnimation(effect_, "opacity");
-        animation_->setDuration(kAnimationDurationMs);
-        animation_->setStartValue(0.0);
-        animation_->setEndValue(1.0);
-        animation_->start(QAbstractAnimation::DeleteWhenStopped);
-
-        wordsModeActive_ = false;
-        typing_allowed_ = true;
-
-    } catch (const nlohmann::json::type_error&) {
-        QMessageBox::warning(this, "Ошибка", "Ошибка обработки JSON-ответа. Попробуйте включить VPN.");
+    PromoSettingsDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
     }
+
+    QString theme = dialog.getTheme();
+    int wordCount = dialog.getWordCount();
+
+    typing_allowed_ = false;
+
+    QString result_final;
+    while (true) {
+        QString request = QString(
+            "Please find a random article about %1. "
+            "Summarize the key tips and highlights presented in the article. "
+            "The generated text must contain exactly,i mean EXACTLY!!! %2 words. "
+            "Avoid very long sentences. Avoid using symbols and signs that do not relate to the chosen language. "
+            "The response should contain only the text, without mentioning the article or its source. "
+            "This will be followed by the language in which you will write this text (this is very important). "
+            "Just send a text, don't mention how you did it, don't mention my request. "
+            "Avoid outputting language name that you are using! "
+            "IMPORTANT: set-language:%3"
+        ).arg(theme).arg(wordCount).arg(prompt_language_);
+
+        try {
+            result_final = QString::fromStdString(getResponse(request.toStdString()));
+        } catch (const nlohmann::json::type_error&) {
+            QMessageBox::warning(this, "Ошибка", "Ошибка обработки JSON-ответа. Попробуйте включить VPN.");
+            return;
+        }
+
+        int actualWordCount = result_final.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).count();
+
+        if (actualWordCount >= wordCount - 5 && actualWordCount <= wordCount + 5) {
+            break;
+        }
+
+        qDebug() << "Получено" << actualWordCount << "слов, ожидается" << wordCount << ". Повтор запроса...";
+
+        QThread::sleep(1);
+    }
+
+    generated_text_->setText(result_final);
+    ResetText();
+
+    effect_ = new QGraphicsOpacityEffect(this);
+    generated_text_->setGraphicsEffect(effect_);
+
+    animation_ = new QPropertyAnimation(effect_, "opacity");
+    animation_->setDuration(kAnimationDurationMs);
+    animation_->setStartValue(0.0);
+    animation_->setEndValue(1.0);
+    animation_->start(QAbstractAnimation::DeleteWhenStopped);
+
+    wordsModeActive_ = false;
+    timeModeActive_ = false;
+    typing_allowed_ = true;
 }
 
 void Window::ShowLanguageDialog() {
@@ -457,8 +491,10 @@ void Window::keyPressEvent(QKeyEvent* event) {
             timeRemaining_ = selectedTimeSeconds_;
             typing_allowed_ = false;
             timeLabel_->setText(QString("Осталось времени: %1 с").arg(timeRemaining_));
+            GenerateNewTextFromWordList();
+        } else if (wordsModeActive_) {
+            GenerateNewTextFromWordList();
         }
-        GenerateNewTextFromWordList();
         return;
     }
 
@@ -855,7 +891,6 @@ void Window::GenerateNewTextFromWordList() {
             nextWord = currentWordList_.at(index);
         }
 
-        // Управление заглавной буквой первого слова и последующих после знаков
         if (capitalizeNextWord && !nextWord.isEmpty() && !nextWord[0].isDigit()) {
             if (punctuationModeActive_ || i > 0) {
                 nextWord[0] = nextWord[0].toUpper();
@@ -871,9 +906,6 @@ void Window::GenerateNewTextFromWordList() {
         newSelection.append(nextWord);
         lastWasPunctuation = false;
         ++i;
-
-        // Если текущее слово — число, сбросить флаг capitalizeNextWord,
-        // чтобы следующее слово не начиналось с заглавной буквы
         if (!nextWord.isEmpty() && nextWord[0].isDigit()) {
             capitalizeNextWord = false;
         }
@@ -1843,4 +1875,25 @@ void Window::ShowQuoteSetDialog() {
 
     this->setGraphicsEffect(nullptr);
     overlay->deleteLater();
+}
+
+void Window::UpdateTimeModeButtonState() {
+    if (timeModeButton_) {
+        timeModeButton_->blockSignals(true);
+        timeModeButton_->setChecked(timeModeActive_);
+        timeModeButton_->blockSignals(false);
+    }
+    if (!timeModeActive_) {
+        timeLabel_->clear();
+    }
+}
+
+void Window::DisableTimeMode() {
+    timeModeActive_ = false;
+    countdownTimer_->stop();
+    typing_allowed_ = false;
+    generated_text_->clear();
+    GenerateNewTextFromWordList();
+
+    UpdateTimeModeButtonState();
 }

@@ -36,6 +36,7 @@ add_executable(Keyboard_Trainer main.cpp
         keyboardwidget.h
         fontselector.cpp
         fontselector.h
+        promptsettingsdialog.h
 )
 
 target_link_libraries(Keyboard_Trainer

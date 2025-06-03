@@ -29,6 +29,7 @@
 #include <QtCharts/QDateTimeAxis>
 #include <QtCharts/QValueAxis>
 #include <QTimer>
+#include <QThread>
 #include <QJsonArray>
 #include <QJsonParseError>
 #include <QJsonObject>
@@ -41,6 +42,7 @@
 #include "logindialog.h"
 #include "settingswidget.h"
 #include "keyboardwidget.h"
+#include "promptsettingsdialog.h"
 
 // Constants
 constexpr int kWindowSize = 1600;
@@ -143,6 +145,8 @@ private:
     void StopTypingTimer();
     void UpdateWPM();
     void GenerateNewTextFromWordList();
+    void UpdateTimeModeButtonState();
+    void DisableTimeMode();
 
     // UI elements
     QLabel* generated_text_;
@@ -192,6 +196,7 @@ private:
     bool timeModeActive_ = false;
     int selectedTimeSeconds_ = 60;
     QTimer* countdownTimer_ = nullptr;
+    QPushButton* timeModeButton_ = nullptr;
     int timeRemaining_ = 1;
 
     QMap<QString, QString> caretMap = {

@@ -205,8 +205,6 @@ private:
         { "▯", "▯" },
         { "_", "_" }
     };
-
-
     QFont currentFont_;
     QColor textColor_ = Qt::white;
 };
